@@ -77,7 +77,9 @@
    :period period
    :max-size (min (:max-size course) (:max-size room))
    :min-size (:min-size course)
-   :required-cert (:required-cert course)})
+   :required-cert (:required-cert course)
+   :teachers #{}
+   :roster #{}})
 
 (defn teacher-set-max-classes
   "Updates the teacher to now have a new maximum class limit"
@@ -96,8 +98,6 @@
   [teacher certs-ls]
   (reduce teacher-add-cert teacher certs-ls))
 
-#_(teacher-add-cert-list {:certs #{}} '(:math :physics))
-
 (defn teacher-remove-cert
   "Removes a certification from a teacher"
   [teacher cert-to-remove]
@@ -110,11 +110,11 @@
   [teacher cert]
   ((utils/as-keyword cert) (:certs teacher)))
 
-(defn teacher-count-preps
+(defn teacher-count-preps-db
   [teacher]
   (dao/count-teacher-preps teacher))
 
-(defn teacher-count-sections
+(defn teacher-count-sections-db
   [teacher]
   (dao/count-teacher-sections teacher))
 
@@ -162,9 +162,13 @@
 ;;   [section teacher]
 ;;   (and))
 
-(defn assign-teacher-to-section
+(defn section-assign-teacher
   [section teacher]
   (update section :teachers conj (:teacher-id teacher)))
+
+(defn section-register-student
+  [section student]
+  (update section :roster conj (:student-id student)))
 
 (defn room-set-concurrency
   [room b?]

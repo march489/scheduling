@@ -79,7 +79,10 @@
                   :period :B-per,
                   :max-size 28,
                   :min-size 20,
-                  :required-cert :english})))))))
+                  :required-cert :english
+                  :teachers #{}
+                  :roster #{}}
+                  )))))))
 
 (deftest teacher-set-max-classes-test
   (testing "Does `teacher-set-max-classes` correctly update the :max-classes entry?"

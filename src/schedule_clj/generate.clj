@@ -108,3 +108,34 @@
         r (java.util.Random. seed)]
     (map #(assoc student :student-id (str %)) (repeatedly num-students #(binding [g/*rnd* r] (g/uuid))))))
 
+(defn generate-faculty
+  ;; TODO: FIXME: Currently returns exactly 1 teacher per cert,
+  ;; need additional arg `num-teachers-per-cert`
+  ;; which can be toggled to make sure each cert is covered that many times
+  "Generates a list of faculty based on a course list
+   where each required certification shows up at leat 
+   `num-teachers-per-cert` many times."
+  [seed course-list]
+  (let [needed-certs (->> course-list (map :required-cert) distinct)
+        r (java.util.Random. seed)]
+    (map #(-> (binding [g/*rnd* r] (str (g/uuid))) d/initialize-teacher (d/teacher-add-cert %)) needed-certs)))
+
+(defn generate-rooms
+  ([seed num-rooms]
+   (generate-rooms seed num-rooms 0 0))
+  ([seed num-rooms prob-small-room prob-large-room]
+   (let [r (java.util.Random. seed)
+         room-numbers (map #(str (+ 100 %)) (range num-rooms))]
+     (->> room-numbers
+          (map #(d/initialize-room % 30))
+          (map #(binding [g/*rnd* r]
+                  (let [p (g/float)]
+                    (cond (< p prob-small-room) (assoc % :max-size 18)
+                          (> p (- 1 prob-large-room)) (assoc % :max-size 60)
+                          :else %))))))))
+
+#_(= (generate-rooms 3366 25 0.2 0.05)
+     (generate-rooms 3366 25 0.2 0.05))
+
+#_(->> (generate-random-course-list 2266 10) (map :required-cert) distinct)
+#_(generate-faculty 3366 (generate-random-course-list 2266 10))
