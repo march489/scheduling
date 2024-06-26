@@ -157,11 +157,6 @@
   [course min-size]
   (assoc course :min-size min-size))
 
-
-;; (defn can-teacher-take-section?
-;;   [section teacher]
-;;   (and))
-
 (defn section-assign-teacher
   [section teacher]
   (update section :teachers conj (:teacher-id teacher)))
