@@ -1,8 +1,22 @@
 (ns schedule-clj.data-test
   (:require [schedule-clj.data :as d]
             [clojure.data.generators :as g]
-            [clojure.test :refer [deftest is testing]]))
+            [clojure.test :refer [deftest is testing]]
+            [schedule-clj.dao :as dao]))
 
+;; Easy dummys for testing
+(def SAMPLE-ID (g/uuid))
+(def SAMPLE-NAME (g/uuid))
+(def SAMPLE-LOOKUP-RESULT (list {:teacher_id (str SAMPLE-ID)
+                                 :name (str SAMPLE-NAME)
+                                 :max_classes 5,
+                                 :teacher_id_2 (str SAMPLE-ID)
+                                 :cert ":math"}
+                                {:teacher_id (str SAMPLE-ID)
+                                 :name (str SAMPLE-NAME)
+                                 :max_classes 5,
+                                 :teacher_id_2 (str SAMPLE-ID)
+                                 :cert ":social-science"}))
 
 (deftest initialize-teacher-test
   (testing "Does `initialize-teacher` correctly initialize a teacher"
@@ -121,4 +135,12 @@
           (is (d/teacher-has-cert? teacher :physics))
           (is (not (d/teacher-has-cert? teacher "iep")))
           (is (not (d/teacher-has-cert? teacher :mandarin))))))))
+
+(deftest teacher-lookup-test
+  (testing "Does `teacher-lookup` correctly process incoming data"
+    (with-redefs-fn {#'dao/teacher-lookup (fn [_ _] SAMPLE-LOOKUP-RESULT)}
+      #(is (= (d/teacher-lookup SAMPLE-ID)
+             (-> (d/initialize-teacher SAMPLE-ID)
+                 (d/teacher-add-cert :math)
+                 (d/teacher-add-cert :social-science)))))))
 

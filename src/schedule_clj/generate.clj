@@ -94,9 +94,17 @@
                       (remove #{new-class} course-list)))))))
 
 (defn generate-student-body
+  "Generates a full student body of random students with random selected required classes
+   and electives from a course list"
   [seed course-list num-students]
   (let [r (java.util.Random. seed)]
     (repeatedly num-students #(binding [g/*rnd* r] (generate-random-student course-list)))))
 
-#_(generate-student-body 2266 (generate-random-course-list 3366) 2)
-#_(generate-random-student 2266 (generate-random-course-list 3366 10))
+(defn generate-student-cohort
+  "Generates a cohort of students with unique student-ids but otherwise identical in terms of
+   grade level, required classes, and electives."
+  [seed course-list num-students]
+  (let [student (generate-random-student seed course-list)
+        r (java.util.Random. seed)]
+    (map #(assoc student :student-id (str %)) (repeatedly num-students #(binding [g/*rnd* r] (g/uuid))))))
+
