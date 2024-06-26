@@ -168,12 +168,18 @@
        (jdbc/query db)
        (map :course_id)
        distinct
-       count)) 
+       count))
 
-(defn count-teacher-sections 
+(defn count-teacher-sections
   "Accesses the database to count the number of sections the teacher has been assigned to"
   [teacher]
   (->> (:teacher-id teacher)
        (format "select * from teacher inner join assignment on teacher.teacher_id = assignment.teacher_id inner join section on assignment.section_id = section.section_id inner join course on section.course_id = course.course_id where teacher.teacher_id = '%s'")
        (jdbc/query db)
        count))
+
+(defn teacher-lookup
+  [db teacher-id]
+  (->> teacher-id
+       (format "select * from teacher inner join certs on teacher.teacher_id = certs.teacher_id where teacher.teacher_id = '%s'")
+       (jdbc/query db)))

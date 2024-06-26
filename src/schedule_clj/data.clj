@@ -1,6 +1,7 @@
 (ns schedule-clj.data
   (:require [schedule-clj.dao :as dao]
-            [schedule-clj.utils :as utils]))
+            [schedule-clj.utils :as utils]
+            [clojure.string :as str]))
 
 (def CERTS '(:english
              :math
@@ -18,6 +19,19 @@
              :performance
              :sped
              :ell))
+
+(def PERIODS '(:1st-per
+               :2nd-per
+               :3rd-per
+               :4th-per
+               :5th-per
+               :6th-per
+               :7th-per
+               :8th-per
+               :A-per
+               :B-per
+               :C-per
+               :D-per))
 
 (defn initialize-teacher
   "Initializes a teacher with the minimum amount of data,
@@ -50,15 +64,15 @@
 
 (defn initialize-room
   "Initializes a room with the minimum amount of data,
-     intended to be chained together with functions that add/remove data"
+   intended to be chained together with functions that add/remove data"
   [room-number max-size]
-  {:room-number room-number :max-size max-size})
+  {:room-number room-number :max-size max-size :concurrency? false})
 
 (defn initialize-section
   "Initializes a section with the minimum amount of data,
-     intended to be chained together with functions that add/remove data"
-  [course period room]
-  {:id (random-uuid)
+   intended to be chained together with functions that add/remove data"
+  [id course period room]
+  {:section-id (str id)
    :course-id (:course-id course)
    :period period
    :max-size (min (:max-size course) (:max-size room))
@@ -73,7 +87,16 @@
 (defn teacher-add-cert
   "Adds a certification to a teacher"
   [teacher new-cert]
-  (update teacher :certs conj (utils/as-keyword new-cert)))
+  (if-let [c (some #{(utils/as-keyword new-cert)} CERTS)]
+    (update teacher :certs conj c)
+    teacher))
+
+(defn teacher-add-cert-list
+  "Adds every cert on a list to the teacher"
+  [teacher certs-ls]
+  (reduce teacher-add-cert teacher certs-ls))
+
+#_(teacher-add-cert-list {:certs #{}} '(:math :physics))
 
 (defn teacher-remove-cert
   "Removes a certification from a teacher"
@@ -94,6 +117,13 @@
 (defn teacher-count-sections
   [teacher]
   (dao/count-teacher-sections teacher))
+
+(defn teacher-lookup
+  [teacher-id]
+  (when-let [results (seq (dao/teacher-lookup dao/db (str teacher-id)))]
+    (-> (initialize-teacher teacher-id)
+        (teacher-set-max-classes (-> results first :max_classes))
+        (teacher-add-cert-list (->> results (map :cert) (map #(str/replace % ":" "")) (map keyword))))))
 
 (defn student-add-required-class
   [student new-class]
@@ -136,3 +166,6 @@
   [section teacher]
   (update section :teachers conj (:teacher-id teacher)))
 
+(defn room-set-concurrency
+  [room b?]
+  (assoc room :concurrency? b?))

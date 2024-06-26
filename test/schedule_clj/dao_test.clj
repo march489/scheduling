@@ -8,7 +8,8 @@
 (def TEACHER-ID-1 (random-uuid))
 (def TEACHER-NAME-1 (random-uuid))
 (def TEACHER-MAX-CLASSES-1 5)
-(def TEACHER-CERT-1 (random-uuid))
+(def TEACHER-CERT-1 :math)
+(def TEACHER-CERT-2 :social-science)
 (def STUDENT-ID-1 (random-uuid))
 (def STUDENT-NAME-1 (random-uuid))
 (def STUDENT-GRADE-1 (random-uuid))
@@ -38,6 +39,10 @@
 (def test-cert-1
   {:teacher-id TEACHER-ID-1
    :cert TEACHER-CERT-1})
+
+(def test-cert-2
+  {:teacher-id TEACHER-ID-1
+   :cert TEACHER-CERT-2})
 
 (def test-course-1
   {:course-id COURSE-ID-1
@@ -135,7 +140,8 @@
 
 (deftest select-from-join-test
   (testing "Does select-from-join return the appropriate information from a join?"
-    (is (= (list {:name (str TEACHER-NAME-1) :cert (str TEACHER-CERT-1)})
+    (is (= (list {:name (str TEACHER-NAME-1) :cert (str TEACHER-CERT-1)}
+                 {:name (str TEACHER-NAME-1) :cert (str TEACHER-CERT-2)})
            (dao/select-from-join dao/db
                                  :teacher
                                  :certs
@@ -153,6 +159,20 @@
     (is (= 5
            (dao/count-teacher-sections test-teacher-1)))))
 
+(deftest teacher-lookup-test
+  (testing "Do we look up the correct teacher given their id?"
+    (is (= (list {:teacher_id (str TEACHER-ID-1)
+                  :name (str TEACHER-NAME-1)
+                  :max_classes 5,
+                  :teacher_id_2 (str TEACHER-ID-1)
+                  :cert ":math"}
+                 {:teacher_id (str TEACHER-ID-1)
+                  :name (str TEACHER-NAME-1)
+                  :max_classes 5,
+                  :teacher_id_2 (str TEACHER-ID-1)
+                  :cert ":social-science"})
+           (dao/teacher-lookup dao/db (str TEACHER-ID-1))))))
+
 (defn setup-testing-db
   [db]
   (println "Setting up testing db")
@@ -161,6 +181,7 @@
   (jdbc/insert! db :teacher (utils/db-friendly-keys test-teacher-1))
   (jdbc/insert! db :student (utils/db-friendly-keys test-student-1))
   (jdbc/insert! db :certs (utils/db-friendly-keys test-cert-1))
+  (jdbc/insert! db :certs (utils/db-friendly-keys test-cert-2))
   (jdbc/insert! db :course (utils/db-friendly-keys test-course-1))
   (jdbc/insert! db :course (utils/db-friendly-keys test-course-2))
   (jdbc/insert! db :section (utils/db-friendly-keys test-section-1))
