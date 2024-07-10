@@ -6,33 +6,40 @@
 (def MAX-TEACHER-PREPS 2)
 
 (defn all-course-sections
+  "Returns a list of all sections in the schedule with the given course-id"
   [schedule course-id]
   (->> schedule vals (filter #(= course-id (:course-id %))) seq))
 
 (defn lookup-section
+  "Returns the section in the schedule with the given id"
   [schedule section-id]
-  ((keyword section-id) schedule))
+  (section-id schedule))
 
 (defn lookup-teacher
+  "Returns the teacher in the faculty with the given id"
   [faculty teacher-id]
-  ((keyword teacher-id) faculty))
+  (teacher-id faculty))
 
 (defn lookup-course
+  "Returns the course in the catalog with the given id"
   [course-catalog course-id]
-  ((keyword course-id) course-catalog))
+  (course-id course-catalog))
 
-(defn lookup-teachers-with-cert
-  [faculty cert]
-  (filter #(d/teacher-has-cert? % cert) (vals faculty)))
+;; (defn lookup-teachers-with-cert
+;;   "Returns a list of teachers with the given cert"
+;;   [faculty cert]
+;;   (filter #(d/teacher-has-cert? % cert) (vals faculty)))
 
-(defn teacher-assigned-to-section?
-  [schedule teacher section-id]
-  (-> schedule
-      section-id
-      :teachers
-      (contains? (:teacher-id teacher))))
+;; (defn teacher-assigned-to-section?
+;;   "Is the teacher assigned to the given section-id in the schedule?"
+;;   [schedule teacher section-id]
+;;   (-> schedule
+;;       section-id
+;;       :teachers
+;;       (contains? (:teacher-id teacher))))
 
 (defn teacher-preps
+  "Lists the distinct courses that the teacher is currently assigned to teach"
   [schedule teacher]
   (->> schedule
        vals
@@ -42,15 +49,21 @@
        set))
 
 (defn count-teacher-sections
+  "Counts the number of sections the teacher is currently assigned to"
   [schedule teacher]
   (->> schedule
        vals
        (filter #(contains? (:teachers %) (:teacher-id teacher)))
        count))
 
-#_(< (count-teacher-sections bad-schedule (first (vals faculty))) (:max-num-classes (first (vals faculty))))
+#_(< (count-teacher-sections bad-schedule (first (vals faculty)))
+     (:max-num-classes (first (vals faculty))))
 
 (defn can-teacher-take-section?
+  "Determines if a teacher can add a section of the given course to their schedule, by checking 
+   1) is the teacher currently below the max number of classes they can teach?, 
+   2) does the teacher have the required cert for the class?, and 
+   3) Would adding the class mean the teacher has more than the max number of distinct preps?"
   [schedule teacher course]
   (and (< (count-teacher-sections schedule teacher) (:max-num-classes teacher))
        (d/teacher-has-cert? teacher (:required-cert course))
@@ -60,68 +73,79 @@
            count
            (<= MAX-TEACHER-PREPS))))
 
+(defn find-available-teacher
+  "Finds a teacher among the faculty that can add a section of that course to their schedule"
+  [schedule faculty course]
+  (->> faculty
+       vals
+       (filter #(can-teacher-take-section? schedule % course))
+       first))
+
 (defn register-student-to-section
+  "Updates the schedule to add a student to the roster for a section."
   [schedule student section-id]
   (update schedule section-id d/section-register-student student))
 
 (defn assign-teacher-to-section
+  "Updates the schedule to assign a teacher to teach a specfic section."
   [schedule teacher section-id]
   (update schedule section-id d/section-assign-teacher teacher))
 
-(defn create-section
+(defn find-open-section-by-course-id
+  "Looks through the schedule to find if there already exists a section of the course offered."
+  [schedule course-id]
+  (->> schedule
+       vals
+       (filter #(= course-id (:course-id %)))
+       (filter #(< (count (:roster %)) (:max-size %)))
+       first
+       :section-id))
+
+(defn create-new-section
+  "Updates the schedule to include a new section for a course if there's a teacher who can teach it."
   [schedule faculty course-catalog course-id period]
   (let [course (lookup-course course-catalog course-id)]
-    (if-let [teacher (->> faculty
-                          vals
-                          (filter #(can-teacher-take-section? schedule % course))
-                          first)]
+    (if-let [teacher (find-available-teacher schedule faculty course)]
       (let [section (-> (random-uuid)
                         (d/initialize-section course period (d/initialize-room "222" 30))
                         (d/section-assign-teacher teacher))]
         (assoc schedule (:section-id section) section))
       schedule)))
 
-#_(create-section bad-schedule
-                  faculty
-                  test-course-catalog
-                  "c8e30929-9b68-d302-1083-e3b463961d90"
-                  :1st-per)
 
-(defn schedule-student
-  [schedule faculty rooms student]
-  ;; TODO: Fill this in
-  )
+(defn update-schedule-with-section
+  [schedule faculty course-catalog course-id]
+  (if (find-open-section-by-course-id schedule course-id)
+    schedule
+    (create-new-section schedule faculty course-catalog course-id :1st)))
+
+(defn schedule-student-required-classes
+  [schedule faculty course-catalog student]
+  (let [updated-schedule (reduce #(update-schedule-with-section %1 faculty course-catalog %2)
+                                 schedule
+                                 (:requirements student))]
+    (reduce #(register-student-to-section %1
+                                          student
+                                          (find-open-section-by-course-id updated-schedule %2))
+            updated-schedule
+            (:requirements student))))
+
+(defn schedule-all-required-classes
+  [schedule faculty course-catalog student-body]
+  (reduce #(schedule-student-required-classes %1
+                                              faculty
+                                              course-catalog
+                                              %2)
+          schedule
+          (vals student-body)))
+
+#_(def first-pass (schedule-all-required-classes {} faculty test-course-catalog student-body))
+#_first-pass
 
 (defn -main
   "launch!"
   []
   (println (g/generate-random-student (g/generate-random-course-list 3366 55))))
 
-#_(def test-course-catalog (reduce
-                            #(assoc %1 (keyword (:course-id %2)) %2)
-                            {}
-                            (g/generate-random-course-list 2266 10)))
-#_(def faculty (reduce
-                #(assoc %1 (keyword (:teacher-id %2)) %2)
-                {}
-                (g/generate-faculty 2277 (vals test-course-catalog))))
-#_(def bad-schedule (reduce
-                     #(assoc %1 (keyword (:section-id %2)) %2)
-                     {}
-                     (map #(d/initialize-section (str (random-uuid)) %1 %2 %3)
-                          test-course-catalog
-                          d/PERIODS
-                          (g/generate-rooms 2288 8))))
-#_(def rooms (g/generate-rooms 2288 10))
 
-#_test-course-catalog
-#_faculty
-#_bad-schedule
-#_rooms
 
-#_(all-course-sections bad-schedule "f1f0754e-77a2-c6bd-af03-468a775eb82a")
-#_(assign-student-to-section bad-schedule
-                             (g/generate-random-student (vals test-course-catalog))
-                             "0708dc23-36a8-406d-b2d3-e32293d0cc8d")
-
-#_(g/generate-random-student 3366 (vals test-course-catalog))

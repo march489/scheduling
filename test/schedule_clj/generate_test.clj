@@ -54,7 +54,7 @@
 (deftest generate-student-body-test
   (testing "Do we consistently generate the same student body with their preferences?"
     (let [course-list (g/generate-random-course-list 3366 10)
-          student-body (g/generate-student-body 2266 course-list 2)]
+          student-body (g/generate-student-list 2266 course-list 2)]
       (is (= student-body
              '({:student-id :ebca8c0d-f1f0-754e-77a2-c6bcaf03468a,
                 :grade "9",
@@ -84,7 +84,7 @@
 (deftest generate-student-cohort-test
   (testing "Does `generate-student-cohort` consistently generate a cohort of students with unique ids but are otherwise identical?"
     (let [course-list (g/generate-random-course-list 3366 10)
-          cohort (g/generate-student-cohort 2266 course-list 3)]
+          cohort (g/generate-student-cohort-list 2266 course-list 3)]
       (is (= cohort
              '({:student-id :ebca8c0d-f1f0-754e-77a2-c6bcaf03468a,
                 :grade "9",

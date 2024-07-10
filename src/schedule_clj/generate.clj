@@ -61,23 +61,23 @@
 
 #_(generate-random-course-list 5)
 
-(comment
-  "NOTE: The function below doesn't produce reproducible randomness
+#_(comment
+    "NOTE: The function below doesn't produce reproducible randomness
    starting from a given seed. When a lazy sequence is involved
    (in this case, with `repeatedly`), the binding needs to happen
-   every iteration")
-;; (defn generate-random-course-list*
-;;   ([num-classes]
-;;    (generate-random-course-list* 3366 num-classes))
-;;   ([seed num-classes]
-;;    (let [r (java.util.Random. seed)]
-;;      (binding [g/*rnd* r]
-;;        (repeatedly
-;;         num-classes
-;;         #(let [p (g/float)]
-;;            (if (< p 0.1)
-;;              (intialize-random-course-with-limits)
-;;              (initialize-random-course))))))))
+   every iteration"
+    (defn generate-random-course-list*
+      ([num-classes]
+       (generate-random-course-list* 3366 num-classes))
+      ([seed num-classes]
+       (let [r (java.util.Random. seed)]
+         (binding [g/*rnd* r]
+           (repeatedly
+            num-classes
+            #(let [p (g/float)]
+               (if (< p 0.1)
+                 (generate-random-course-with-limits)
+                 (generate-random-course)))))))))
 
 (defn generate-random-student
   "Generates a student with a random uuid and random required classes 
@@ -101,16 +101,16 @@
 
 #_(generate-random-student (generate-random-course-list 10))
 
-(defn generate-student-body
+(defn generate-student-list
   "Generates a full student body of random students with random selected required classes
    and electives from a course list"
   [seed course-list num-students]
   (let [r (java.util.Random. seed)]
     (repeatedly num-students #(binding [g/*rnd* r] (generate-random-student course-list)))))
 
-#_(generate-student-body 2266 (generate-random-course-list 20) 2)
+#_(generate-student-list 2266 (generate-random-course-list 20) 2)
 
-(defn generate-student-cohort
+(defn generate-student-cohort-list
   "Generates a cohort of students with unique student-ids but otherwise identical in terms of
    grade level, required classes, and electives."
   [seed course-list num-students]
@@ -119,7 +119,15 @@
     (map #(assoc student :student-id (keyword (str %))) (repeatedly num-students #(binding [g/*rnd* r] (g/uuid))))))
 
 #_(generate-random-student 2266 (generate-random-course-list 3366 10))
-#_(generate-student-cohort 2266 (generate-random-course-list 3366 10) 3)
+#_(generate-student-cohort-list 2266 (generate-random-course-list 3366 10) 3)
+
+(defn make-super-map
+  "Given a list of `maps`, creates a new map where the vals are the maps from 
+   the original list and the keys are values under"
+  [maps key]
+  (reduce #(assoc %1 (key %2) %2)
+          {}
+          maps))
 
 (defn generate-faculty
   ;; TODO: FIXME: Currently returns exactly 1 teacher per cert,
@@ -129,9 +137,16 @@
    where each required certification shows up at leat 
    `num-teachers-per-cert` many times."
   [seed course-list]
-  (let [needed-certs (->> course-list (map :required-cert) distinct)
-        r (java.util.Random. seed)]
-    (map #(-> (binding [g/*rnd* r] (g/uuid)) d/initialize-teacher (d/teacher-add-cert %)) needed-certs)))
+  (make-super-map (let [needed-certs (->> course-list (map :required-cert) distinct)
+                        r (java.util.Random. seed)]
+                    (map #(-> (binding [g/*rnd* r] (g/uuid)) d/initialize-teacher (d/teacher-add-cert %)) needed-certs))
+                  :teacher-id))
+
+#_(generate-faculty 2266 (generate-random-course-list 3366 10))
+
+(defn generate-section
+  [course period room]
+  (d/initialize-section (g/uuid) course period room))
 
 (defn generate-rooms
   ([seed num-rooms]
@@ -147,8 +162,28 @@
                           (> p (- 1 prob-large-room)) (assoc % :max-size 60)
                           :else %))))))))
 
-#_(= (generate-rooms 3366 25 0.2 0.05)
-     (generate-rooms 3366 25 0.2 0.05))
+(defn generate-empty-basic-schedule
+  "Generates an empty schedule with one section per period in the catalog."
+  [course-catalog]
+  (make-super-map (let [r (java.util.Random. 4455)]
+                    (map #(binding [g/*rnd* r]
+                            (generate-section %1 %2 %3))
+                         (vals course-catalog)
+                         d/PERIODS
+                         (generate-rooms 2288 8)))
+                  :section-id))
 
-#_(->> (generate-random-course-list 2266 10) (map :required-cert) distinct)
-#_(generate-faculty 3366 (generate-random-course-list 2266 10))
+#_(generate-rooms 2266 10 0.1 0.05)
+
+(defn generate-course-catalog
+  [seed num-classes]
+  (make-super-map (generate-random-course-list seed num-classes) :course-id))
+
+#_(generate-course-catalog 2266 20)
+
+(defn generate-student-body
+  [seed course-catalog num-students]
+  (make-super-map (generate-student-cohort-list seed (vals course-catalog) num-students)
+                  :student-id))
+
+#_(generate-student-body 1199 (generate-course-catalog 2266 20) 20)
