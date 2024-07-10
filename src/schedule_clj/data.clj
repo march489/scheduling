@@ -37,7 +37,7 @@
   "Initializes a teacher with the minimum amount of data,
    intended to be chained together with functions that add/remove data"
   [id]
-  {:teacher-id (str id)
+  {:teacher-id (keyword (str id))
    :max-num-classes 5 ;; default value
    :certs #{}})
 
@@ -45,7 +45,7 @@
   "Initializes a student with the minimum amount of data,
      intended to be chained together with functions that add/remove data"
   [id grade]
-  {:student-id (str id)
+  {:student-id (keyword (str id))
    :grade grade
    :requirements '()
    :electives []})
@@ -57,7 +57,7 @@
   ([course-id required-cert]
    (initialize-course course-id required-cert 20 30))
   ([course-id required-cert min-size max-size]
-   {:course-id (str course-id)
+   {:course-id (keyword (str course-id))
     :required-cert required-cert
     :min-size min-size
     :max-size max-size}))
@@ -72,7 +72,7 @@
   "Initializes a section with the minimum amount of data,
    intended to be chained together with functions that add/remove data"
   [id course period room]
-  {:section-id (str id)
+  {:section-id (keyword (str id))
    :course-id (:course-id course)
    :period period
    :max-size (min (:max-size course) (:max-size room))
@@ -118,12 +118,17 @@
   [teacher]
   (dao/count-teacher-sections teacher))
 
-(defn teacher-lookup
+(defn teacher-lookup-db
   [teacher-id]
   (when-let [results (seq (dao/teacher-lookup dao/db (str teacher-id)))]
     (-> (initialize-teacher teacher-id)
-        (teacher-set-max-classes (-> results first :max_classes))
-        (teacher-add-cert-list (->> results (map :cert) (map #(str/replace % ":" "")) (map keyword))))))
+        (teacher-set-max-classes (-> results
+                                     first
+                                     :max_classes))
+        (teacher-add-cert-list (->> results
+                                    (map :cert)
+                                    (map #(str/replace % ":" ""))
+                                    (map keyword))))))
 
 (defn student-add-required-class
   [student new-class]

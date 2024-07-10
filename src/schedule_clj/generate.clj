@@ -8,11 +8,13 @@
    Can be optionally called with a specific seed to generate
    the same course every time."
   ([]
-   (d/initialize-course (str (g/uuid)) (g/rand-nth d/CERTS)))
+   (d/initialize-course (g/uuid) (g/rand-nth d/CERTS)))
   ([seed]
    (let [r (java.util.Random. seed)]
      (binding [g/*rnd* r]
-       (d/initialize-course (str (g/uuid)) (g/rand-nth d/CERTS))))))
+       (d/initialize-course (g/uuid) (g/rand-nth d/CERTS))))))
+
+#_(generate-random-course)
 
 (defn generate-random-course-with-limits
   "Generates a course with a random uuid and random 
@@ -32,6 +34,8 @@
          (-> (generate-random-course)
              (d/course-set-min low)
              (d/course-set-max high)))))))
+
+#_(generate-random-course-with-limits)
 
 (defn generate-random-course-list
   "Generates a list of `num-courses` random courses, 
@@ -54,6 +58,8 @@
            (if (< p 0.1)
              (generate-random-course-with-limits)
              (generate-random-course))))))))
+
+#_(generate-random-course-list 5)
 
 (comment
   "NOTE: The function below doesn't produce reproducible randomness
@@ -83,7 +89,7 @@
        (generate-random-student course-list))))
   ([course-list]
    (loop
-    [student (d/initialize-student (str (g/uuid)) (str (g/uniform 7 13)))
+    [student (d/initialize-student (g/uuid) (str (g/uniform 7 13)))
      course-list course-list]
      (let [new-class (g/rand-nth course-list)]
        (cond
@@ -93,6 +99,8 @@
          :else (recur (d/student-add-elective student (:course-id new-class))
                       (remove #{new-class} course-list)))))))
 
+#_(generate-random-student (generate-random-course-list 10))
+
 (defn generate-student-body
   "Generates a full student body of random students with random selected required classes
    and electives from a course list"
@@ -100,13 +108,18 @@
   (let [r (java.util.Random. seed)]
     (repeatedly num-students #(binding [g/*rnd* r] (generate-random-student course-list)))))
 
+#_(generate-student-body 2266 (generate-random-course-list 20) 2)
+
 (defn generate-student-cohort
   "Generates a cohort of students with unique student-ids but otherwise identical in terms of
    grade level, required classes, and electives."
   [seed course-list num-students]
   (let [student (generate-random-student seed course-list)
         r (java.util.Random. seed)]
-    (map #(assoc student :student-id (str %)) (repeatedly num-students #(binding [g/*rnd* r] (g/uuid))))))
+    (map #(assoc student :student-id (keyword (str %))) (repeatedly num-students #(binding [g/*rnd* r] (g/uuid))))))
+
+#_(generate-random-student 2266 (generate-random-course-list 3366 10))
+#_(generate-student-cohort 2266 (generate-random-course-list 3366 10) 3)
 
 (defn generate-faculty
   ;; TODO: FIXME: Currently returns exactly 1 teacher per cert,
@@ -118,7 +131,7 @@
   [seed course-list]
   (let [needed-certs (->> course-list (map :required-cert) distinct)
         r (java.util.Random. seed)]
-    (map #(-> (binding [g/*rnd* r] (str (g/uuid))) d/initialize-teacher (d/teacher-add-cert %)) needed-certs)))
+    (map #(-> (binding [g/*rnd* r] (g/uuid)) d/initialize-teacher (d/teacher-add-cert %)) needed-certs)))
 
 (defn generate-rooms
   ([seed num-rooms]

@@ -3,6 +3,8 @@
             [schedule-clj.data :as d])
   (:gen-class))
 
+(def MAX-TEACHER-PREPS 2)
+
 (defn all-course-sections
   [schedule course-id]
   (->> schedule vals (filter #(= course-id (:course-id %))) seq))
@@ -26,7 +28,7 @@
 (defn teacher-assigned-to-section?
   [schedule teacher section-id]
   (-> schedule
-      (keyword section-id)
+      section-id
       :teachers
       (contains? (:teacher-id teacher))))
 
@@ -56,15 +58,15 @@
            (teacher-preps teacher)
            (conj (:course-id course))
            count
-           (<= 2))))
+           (<= MAX-TEACHER-PREPS))))
 
 (defn register-student-to-section
   [schedule student section-id]
-  (update schedule (keyword section-id) d/section-register-student student))
+  (update schedule section-id d/section-register-student student))
 
 (defn assign-teacher-to-section
   [schedule teacher section-id]
-  (update schedule (keyword section-id) d/section-assign-teacher teacher))
+  (update schedule section-id d/section-assign-teacher teacher))
 
 (defn create-section
   [schedule faculty course-catalog course-id period]
@@ -76,7 +78,7 @@
       (let [section (-> (random-uuid)
                         (d/initialize-section course period (d/initialize-room "222" 30))
                         (d/section-assign-teacher teacher))]
-        (assoc schedule (keyword (:section-id section)) section))
+        (assoc schedule (:section-id section) section))
       schedule)))
 
 #_(create-section bad-schedule
