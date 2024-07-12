@@ -33,6 +33,18 @@
                :C-per
                :D-per))
 
+(defn do-periods-overlap?
+  [pd-1 pd-2]
+  (let [pds #{pd-1 pd-2}]
+    (or (= pds #{:2nd-per :A-per})
+        (= pds #{:2nd-per :B-per})
+        (= pds #{:6th-per :A-per})
+        (= pds #{:6th-per :B-per})
+        (= pds #{:3rd-per :C-per})
+        (= pds #{:3rd-per :D-per})
+        (= pds #{:7th-per :C-per})
+        (= pds #{:7th-per :D-per}))))
+
 (defn initialize-teacher
   "Initializes a teacher with the minimum amount of data,
    intended to be chained together with functions that add/remove data"
@@ -66,7 +78,10 @@
   "Initializes a room with the minimum amount of data,
    intended to be chained together with functions that add/remove data"
   [room-number max-size]
-  {:room-number room-number :max-size max-size :concurrency? false})
+  {:room-number room-number
+   :max-size max-size
+   :periods #{}
+   :concurrency? false})
 
 (defn initialize-section
   "Initializes a section with the minimum amount of data,
@@ -75,6 +90,7 @@
   {:section-id (keyword (str id))
    :course-id (:course-id course)
    :period period
+   :room-number (:room-number room)
    :max-size (min (:max-size course) (:max-size room))
    :min-size (:min-size course)
    :required-cert (:required-cert course)

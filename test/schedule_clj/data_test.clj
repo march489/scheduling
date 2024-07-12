@@ -2,7 +2,8 @@
   (:require [schedule-clj.data :as d]
             [clojure.data.generators :as g]
             [clojure.test :refer [deftest is testing]]
-            [schedule-clj.dao :as dao]))
+            [schedule-clj.dao :as dao]
+            [clojure.math.combinatorics :as c]))
 
 ;; Easy dummys for testing
 (def SAMPLE-ID (g/uuid))
@@ -17,6 +18,19 @@
                                  :max_classes 5,
                                  :teacher_id_2 (str SAMPLE-ID)
                                  :cert ":social-science"}))
+
+((deftest do-periods-overlap?-test
+   (testing "Do we have the correct pairs of overlapping periods?"
+     (let [combos (c/combinations d/PERIODS 2)]
+       (is (= #{'(:2nd-per :A-per)
+                '(:2nd-per :B-per)
+                '(:6th-per :A-per)
+                '(:6th-per :B-per)
+                '(:3rd-per :C-per)
+                '(:3rd-per :D-per)
+                '(:7th-per :C-per)
+                '(:7th-per :D-per)}
+              (set (filter #(apply d/do-periods-overlap? %) combos))))))))
 
 (deftest initialize-teacher-test
   (testing "Does `initialize-teacher` correctly initialize a teacher"
@@ -63,6 +77,7 @@
     (let [room (d/initialize-room "222" 28)]
       (is (= "222" (:room-number room)))
       (is (= 28 (:max-size room)))
+      (is empty? (:periods room))
       (is (not (:concurrency? room))))))
 
 (deftest initialize-section-test
@@ -77,12 +92,12 @@
                  {:section-id :50aaf662-fdfa-a479-e6bd-a27fe70f94d0,
                   :course-id :d7b3b968-9e07-3cab-fcfb-e5e471477ab5,
                   :period :B-per,
+                  :room-number "222"
                   :max-size 28,
                   :min-size 20,
                   :required-cert :english
                   :teachers #{}
-                  :roster #{}}
-                  )))))))
+                  :roster #{}})))))))
 
 (deftest teacher-set-max-classes-test
   (testing "Does `teacher-set-max-classes` correctly update the :max-classes entry?"
@@ -143,7 +158,7 @@
   (testing "Does `teacher-lookup` correctly process incoming data"
     (with-redefs-fn {#'dao/teacher-lookup (fn [_ _] SAMPLE-LOOKUP-RESULT)}
       #(is (= (d/teacher-lookup-db SAMPLE-ID)
-             (-> (d/initialize-teacher SAMPLE-ID)
-                 (d/teacher-add-cert :math)
-                 (d/teacher-add-cert :social-science)))))))
+              (-> (d/initialize-teacher SAMPLE-ID)
+                  (d/teacher-add-cert :math)
+                  (d/teacher-add-cert :social-science)))))))
 

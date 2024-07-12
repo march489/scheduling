@@ -6,7 +6,8 @@
   :dependencies [[org.clojure/clojure "1.11.1"]
                  [org.clojure/java.jdbc "0.7.8"]
                  [org.xerial/sqlite-jdbc "3.23.1"]
-                 [org.clojure/data.generators "1.1.0"]]
+                 [org.clojure/data.generators "1.1.0"]
+                 [org.clojure/math.combinatorics "0.3.0"]]
   :main ^:skip-aot schedule-clj.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
