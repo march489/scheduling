@@ -1,7 +1,6 @@
 (ns schedule-clj.core
   (:require [schedule-clj.generate :as g]
-            [schedule-clj.data :as d]
-            [clojure.java.io :as io])
+            [schedule-clj.data :as d])
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
@@ -39,22 +38,26 @@
 ;;       :teachers
 ;;       (contains? (:teacher-id teacher))))
 
-(defn teacher-preps
+(defn get-teacher-schedule
+  "Returns a sub hash-map of the full schedule (structured the same way) of all of the sections
+   the teacher is currently assigned to."
+  [schedule teacher-id]
+  (into {}
+        (filter (fn [[_ section]] (contains? (:teachers section) teacher-id)) schedule)))
+
+(defn get-teacher-preps
   "Lists the distinct courses that the teacher is currently assigned to teach"
-  [schedule teacher]
-  (->> schedule
+  [schedule teacher-id]
+  (->> (get-teacher-schedule schedule teacher-id)
        vals
-       (filter #(contains? (:teachers %) (:teacher-id teacher)))
        (map :course-id)
        distinct
        set))
 
 (defn count-teacher-sections
   "Counts the number of sections the teacher is currently assigned to"
-  [schedule teacher]
-  (->> schedule
-       vals
-       (filter #(contains? (:teachers %) (:teacher-id teacher)))
+  [schedule teacher-id]
+  (->> (get-teacher-schedule schedule teacher-id)
        count))
 
 (defn can-teacher-take-section?
@@ -64,10 +67,10 @@
    2. Does the teacher have the required cert for the class?, and 
    3. Would adding the class mean the teacher has more than the max number of distinct preps?"
   [schedule teacher course]
-  (and (< (count-teacher-sections schedule teacher) (:max-num-classes teacher))
+  (and (< (count-teacher-sections schedule (:teacher-id teacher)) (:max-num-classes teacher))
        (d/teacher-has-cert? teacher (:required-cert course))
        (-> schedule
-           (teacher-preps teacher)
+           (get-teacher-preps (:teacher-id teacher))
            (conj (:course-id course))
            count
            (<= MAX-TEACHER-PREPS))))
@@ -78,15 +81,48 @@
   (->> faculty
        vals
        (filter #(can-teacher-take-section? schedule % course))
+       (sort-by count-teacher-sections >)
        first))
 
+(defn get-student-schedule
+  "Returns a sub hash-map of the full schedule (structured the same way) of all of the sections
+   the student is currently registered for."
+  [schedule student-id]
+  (into {}
+        (filter (fn [[_ section]] (contains? (:roster section) student-id)) schedule)))
+
+#_(filter (fn [[_ section]] (contains? (:roster section) :46454778-0fc3-cf1e-ed8c-ceb5705255a8))
+          first-pass)
+
+#_((fn [[_ section]] (contains? (:roster section) :46454778-0fc3-cf1e-ed8c-ceb5705255a8)) 
+   (first first-pass))
+
+#_((fn [[_ section]] (:roster section))
+   (section first-pass))
+
 (defn find-non-overlapping-period
-  [& pds])
+  [& pds]
+  (let [find-single-period-complements (fn [pd] (partial (complement d/do-periods-overlap?) pd))
+        filter-single-period (fn [coll pd] (filter (find-single-period-complements pd) coll))]
+    (reduce #(filter-single-period %1 %2) d/PERIODS pds)))
+
+(defn get-student-open-periods
+  [schedule student-id]
+  (let [scheduled-pds (->> (get-student-schedule schedule student-id)
+                           vals
+                           (map #(:period %)))]
+    (apply find-non-overlapping-period scheduled-pds)))
+
+#_(get-student-open-periods first-pass :46454778-0fc3-cf1e-ed8c-ceb5705255a8)
 
 (defn register-student-to-section
-  "Updates the schedule to add a student to the roster for a section."
+  "Updates the schedule to add a student to the roster for a section. If no such section exists,
+   returns the existing schedule and fails to register the student."
   [schedule student section-id]
-  (update schedule section-id d/section-register-student student))
+  (if (and section-id 
+           (section-id schedule))
+    (update schedule section-id d/section-register-student student)
+    schedule))
 
 (defn assign-teacher-to-section
   "Updates the schedule to assign a teacher to teach a specfic section."
@@ -108,10 +144,10 @@
   [schedule faculty course-catalog course-id period]
   (let [course (lookup-course course-catalog course-id)]
     (if-let [teacher (find-available-teacher schedule faculty course)]
-      (let [section (-> (random-uuid)
-                        (d/initialize-section course period (d/initialize-room "222" 30))
-                        (d/section-assign-teacher teacher))]
-        (assoc schedule (:section-id section) section))
+      (let [section (d/initialize-section (random-uuid) course period (d/initialize-room "222" 30))]
+        (-> schedule
+            (assoc (:section-id section) section)
+            (assign-teacher-to-section teacher (:section-id section))))
       schedule)))
 
 
@@ -141,18 +177,17 @@
           schedule
           (vals student-body)))
 
-;; #_(def test-course-catalog (g/generate-course-catalog 3366 55))
-;; #_test-course-catalog
+#_(def test-course-catalog (g/generate-course-catalog 3366 55))
+#_test-course-catalog
 
-;; #_(def faculty (g/generate-faculty 1122 (vals test-course-catalog)))
-;; #_faculty
+#_(def faculty (g/generate-faculty 1122 (vals test-course-catalog)))
+#_faculty
 
-;; #_(def student-body (g/generate-student-body 2233 test-course-catalog 90))
-;; #_student-body
+#_(def student-body (g/generate-student-body 2233 test-course-catalog 49))
+#_student-body
 
-;; #_(def first-pass (schedule-all-required-classes {} faculty test-course-catalog student-body))
-;; #_first-pass
-;; #_(nth (vals first-pass) 1)
+#_(def first-pass (schedule-all-required-classes {} faculty test-course-catalog student-body))
+#_(first first-pass)
 
 (defn -main
   "launch!"
@@ -160,10 +195,9 @@
   (let [test-course-catalog (g/generate-course-catalog 3366 55)
         faculty (g/generate-faculty 1122 (vals test-course-catalog))
         student-body (g/generate-student-body 2233 test-course-catalog 49)
-        ;; schedule (schedule-all-required-classes {} faculty test-course-catalog student-body)
-        schedule (schedule-all-required-classes {} faculty test-course-catalog student-body)
-        ]
-    (doseq [section (vals schedule)]
-      (println (str section \newline)))))
+        schedule (schedule-all-required-classes {} faculty test-course-catalog student-body)]
+    (doseq [[section-id section] schedule]
+      (println (str section-id \newline section \newline)))
+    (println (get-student-schedule schedule :46454778-0fc3-cf1e-ed8c-ceb5705255a8))))
 
 

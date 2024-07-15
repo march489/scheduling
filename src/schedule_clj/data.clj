@@ -35,15 +35,25 @@
 
 (defn do-periods-overlap?
   [pd-1 pd-2]
-  (let [pds #{pd-1 pd-2}]
-    (or (= pds #{:2nd-per :A-per})
-        (= pds #{:2nd-per :B-per})
-        (= pds #{:6th-per :A-per})
-        (= pds #{:6th-per :B-per})
-        (= pds #{:3rd-per :C-per})
-        (= pds #{:3rd-per :D-per})
-        (= pds #{:7th-per :C-per})
-        (= pds #{:7th-per :D-per}))))
+  (or (= pd-1 pd-2)
+      (let [pds #{pd-1 pd-2}]
+        (or (= pds #{:2nd-per :A-per})
+            (= pds #{:2nd-per :B-per})
+            (= pds #{:6th-per :A-per})
+            (= pds #{:6th-per :B-per})
+            (= pds #{:3rd-per :C-per})
+            (= pds #{:3rd-per :D-per})
+            (= pds #{:7th-per :C-per})
+            (= pds #{:7th-per :D-per})))))
+
+(defn is-half-block?
+  [pd]
+  (some #{pd} '(:A-per :B-per :C-per :D-per)))
+
+(defn is-full-block?
+  [pd]
+  (and (some #{pd} PERIODS)
+       (not (is-half-block? pd))))
 
 (defn initialize-teacher
   "Initializes a teacher with the minimum amount of data,
@@ -105,7 +115,7 @@
 (defn teacher-add-cert
   "Adds a certification to a teacher"
   [teacher new-cert]
-  (if-let [c (some #{(utils/as-keyword new-cert)} CERTS)]
+  (if-let [c (some #{new-cert} CERTS)]
     (update teacher :certs conj c)
     teacher))
 
@@ -117,14 +127,14 @@
 (defn teacher-remove-cert
   "Removes a certification from a teacher"
   [teacher cert-to-remove]
-  (update teacher :certs disj (utils/as-keyword cert-to-remove)))
+  (update teacher :certs disj cert-to-remove))
 
 (defn teacher-has-cert?
   "Determines whether a teacher has a given certification,
    with the flexibility to accept the names of certifications as either
    a string or a keyword"
   [teacher cert]
-  ((utils/as-keyword cert) (:certs teacher)))
+  (contains? (:certs teacher) cert))
 
 (defn teacher-count-preps-db
   [teacher]
@@ -164,11 +174,11 @@
 
 (defn studet-add-label
   [student label]
-  (assoc student (utils/as-keyword label) true))
+  (assoc student label true))
 
 (defn student-remove-label
   [student label]
-  (dissoc student (utils/as-keyword label)))
+  (dissoc student label))
 
 (defn course-set-max
   [course max-size]

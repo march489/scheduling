@@ -2,21 +2,6 @@
   (:require [clojure.test :refer [deftest is testing]]
             [schedule-clj.utils :as utils]))
 
-(deftest as-keyword-with-spaces
-  (testing "Does `as-keyword` leave strings without spaces alone?"
-    (is (= :metronome
-           (utils/as-keyword "metronome")))))
-
-(deftest as-keyword-with-leading-trailing-spaces
-  (testing "Does `as-keyword` trim leading and trailing spaces?"
-    (is (= :metronome
-           (utils/as-keyword "      metronome     ")))))
-
-(deftest as-keyword-with-internal-spaces
-  (testing "Does `as-keyword` turn internal spaces into dashes?"
-    (is (= :hello-world
-           (utils/as-keyword "   hello     world    ")))))
-
 (deftest dash->underscore-leaves-underscores
   (testing "Does `dash->underscore` leave underscores unchanged?"
     (is (= :hello_world

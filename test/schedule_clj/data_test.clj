@@ -116,7 +116,7 @@
       (binding [g/*rnd* r]
         (let [teacher (-> (g/uuid)
                           (d/initialize-teacher)
-                          (d/teacher-add-cert "math")
+                          (d/teacher-add-cert :math)
                           (d/teacher-add-cert :physics)
                           (d/teacher-add-cert :iep))]
           (is (= :d7b3b968-9e07-3cab-fcfb-e5e471477ab5 (:teacher-id teacher)))
@@ -129,10 +129,10 @@
       (binding [g/*rnd* r]
         (let [teacher (-> (g/uuid)
                           (d/initialize-teacher)
-                          (d/teacher-add-cert "math")
+                          (d/teacher-add-cert :math)
                           (d/teacher-add-cert :physics)
                           (d/teacher-add-cert :sped)
-                          (d/teacher-remove-cert "physics"))]
+                          (d/teacher-remove-cert :physics))]
           (is (= :d7b3b968-9e07-3cab-fcfb-e5e471477ab5 (:teacher-id teacher)))
           (is (= 5 (:max-num-classes teacher)))
           (is (= #{:math :sped} (:certs teacher))))))))
@@ -143,7 +143,7 @@
       (binding [g/*rnd* r]
         (let [teacher (-> (g/uuid)
                           (d/initialize-teacher)
-                          (d/teacher-add-cert "math")
+                          (d/teacher-add-cert :math)
                           (d/teacher-add-cert :physics)
                           (d/teacher-add-cert :iep))]
           (is (= :d7b3b968-9e07-3cab-fcfb-e5e471477ab5 (:teacher-id teacher)))
@@ -151,7 +151,7 @@
           (is (= #{:math :physics} (:certs teacher)))
           (is (d/teacher-has-cert? teacher :math))
           (is (d/teacher-has-cert? teacher :physics))
-          (is (not (d/teacher-has-cert? teacher "iep")))
+          (is (not (d/teacher-has-cert? teacher :iep)))
           (is (not (d/teacher-has-cert? teacher :mandarin))))))))
 
 (deftest teacher-lookup-test
