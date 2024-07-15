@@ -1,6 +1,5 @@
 (ns schedule-clj.data
   (:require [schedule-clj.dao :as dao]
-            [schedule-clj.utils :as utils]
             [clojure.string :as str]))
 
 (def CERTS '(:english
@@ -107,6 +106,14 @@
    :teachers #{}
    :roster #{}})
 
+(defn initialize-lunch-period
+  [id period]
+  {:section-id (keyword (str id))
+   :course-id :lunch
+   :period period
+   :roster #{}
+   :max-size 350})
+
 (defn teacher-set-max-classes
   "Updates the teacher to now have a new maximum class limit"
   [teacher new-max]
@@ -179,6 +186,10 @@
 (defn student-remove-label
   [student label]
   (dissoc student label))
+
+(defn student-assign-lunch
+  [student lunch-period]
+  (assoc student :lunch lunch-period))
 
 (defn course-set-max
   [course max-size]

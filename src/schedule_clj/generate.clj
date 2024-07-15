@@ -136,13 +136,20 @@
   "Generates a list of faculty based on a course list
    where each required certification shows up at leat 
    `num-teachers-per-cert` many times."
-  [seed course-list]
-  (make-super-map (let [needed-certs (->> course-list (map :required-cert) distinct)
-                        r (java.util.Random. seed)]
-                    (map #(-> (binding [g/*rnd* r] (g/uuid)) d/initialize-teacher (d/teacher-add-cert %)) needed-certs))
-                  :teacher-id))
+  ([seed course-list]
+   (generate-faculty seed course-list 1))
+  ([seed course-list teachers-per-cert]
+   (make-super-map (let [needed-certs (->> course-list
+                                           (map :required-cert)
+                                           distinct
+                                           (map #(repeat teachers-per-cert %))
+                                           flatten)
+                         r (java.util.Random. seed)]
+                     (map #(-> (binding [g/*rnd* r] (g/uuid)) d/initialize-teacher (d/teacher-add-cert %))
+                          needed-certs))
+                   :teacher-id)))
 
-#_(generate-faculty 2266 (generate-random-course-list 3366 10))
+#_(generate-faculty 2266 (generate-random-course-list 3366 10) 2)
 
 (defn generate-section
   [course period room]
@@ -161,18 +168,6 @@
                     (cond (< p prob-small-room) (assoc % :max-size 18)
                           (> p (- 1 prob-large-room)) (assoc % :max-size 60)
                           :else %))))))))
-
-(defn generate-empty-basic-schedule
-  "Generates an empty schedule with one section per period in the catalog."
-  [course-catalog]
-  (make-super-map (let [r (java.util.Random. 4455)]
-                    (map #(binding [g/*rnd* r]
-                            (generate-section %1 %2 %3))
-                         (vals course-catalog)
-                         d/PERIODS
-                         (generate-rooms 2288 8)))
-                  :section-id))
-
 #_(generate-rooms 2266 10 0.1 0.05)
 
 (defn generate-course-catalog
@@ -181,9 +176,15 @@
 
 #_(generate-course-catalog 2266 20)
 
-(defn generate-student-body
+(defn generate-homogeneous-student-body
   [seed course-catalog num-students]
   (make-super-map (generate-student-cohort-list seed (vals course-catalog) num-students)
                   :student-id))
 
-#_(generate-student-body 1199 (generate-course-catalog 2266 20) 20)
+(defn generate-heterogeneous-student-body
+  [seed course-catalog num-students]
+  (make-super-map (generate-student-list seed (vals course-catalog) num-students)
+                  :student-id))
+
+#_(generate-homogeneous-student-body 1199 (generate-course-catalog 2266 20) 20)
+#_(generate-heterogeneous-student-body 1199 (generate-course-catalog 2266 20) 20)
