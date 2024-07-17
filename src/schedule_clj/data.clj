@@ -110,6 +110,8 @@
   [id period]
   {:section-id (keyword (str id))
    :course-id :lunch
+   :required-cert :any
+   :teachers #{}
    :period period
    :roster #{}
    :max-size 350})

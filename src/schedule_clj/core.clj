@@ -1,7 +1,8 @@
 (ns schedule-clj.core
   (:require [schedule-clj.generate :as g]
             [schedule-clj.data :as d]
-            [clojure.set :as s])
+            [clojure.set :as s]
+            [clojure.java.io :as io])
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
@@ -184,8 +185,8 @@
                                                                           faculty
                                                                           course-catalog
                                                                           %2
-                                                                          (first student-free-periods))
-                       new-section-id (lookup-section updated-schedule %2 (first student-free-periods))]
+                                                                          (first (sort student-free-periods)))
+                       new-section-id (lookup-section updated-schedule %2 (first (sort student-free-periods)))]
                    (register-student-to-section updated-schedule student new-section-id))))
             schedule
             required-classes)))
@@ -254,21 +255,25 @@
 (defn -main
   "launch!"
   []
-  (time (let [faculty-per-cert 16
-              test-course-catalog (g/generate-course-catalog 3366 55)
+  (time (let [faculty-per-cert 5
+              test-course-catalog (g/generate-course-catalog 3366 10)
               faculty (g/generate-faculty 1122 (vals test-course-catalog) faculty-per-cert)
-              student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 500)
+              student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 250)
               schedule (schedule-all-required-classes (create-all-lunch-sections {}) faculty test-course-catalog student-body)]
-          ;; (doseq [[section-id section] schedule]
-          ;;   (println (str section-id \newline section \newline)))
-          ;; (doseq [student-id (keys student-body)]
-          ;;   (println (str "Student ID: " student-id))
-          ;;   (doseq [[section-id section] (get-student-schedule schedule student-id)]
-          ;;     (println (str "Section ID: " section-id ", Course ID: " (:course-id section) ", Period: " (:period section))))
-          ;;   (println))
+          (io/delete-file "./resources/output.txt")
+          (with-open [wrtr (io/writer "./resources/output.txt" :append true)]
+            (.write wrtr (str "Current run time: " (str (java.time.LocalDateTime/now))))
+            (.write wrtr (str \newline "Results:\n"))
 
-          ;; (doseq [[student-id missing-classes] (get-all-missing-classes schedule student-body)]
-          ;;   (println (str student-id ", " missing-classes)))
-          (failure-summary! schedule faculty student-body faculty-per-cert))))
+            (doseq [section (sort-by :required-cert  (sort-by #(first (:teachers %)) (vals schedule)))]
+              (.write wrtr (str "Teacher ID: " (first (:teachers section)) ", pd: " (:period section) ", subject: " (:required-cert section) ", enrollment: " (count (:roster section)) \newline)))
+            (doseq [student-id (keys student-body)]
+              (.write wrtr (str "Student ID: " student-id "\n"))
+              (doseq [[section-id section] (get-student-schedule schedule student-id)]
+                (.write wrtr (str "Section ID: " section-id ", Course ID: " (:course-id section) ", Period: " (:period section) "\n")))
+              (.write wrtr "\n"))
+            (doseq [[student-id missing-classes] (get-all-missing-classes schedule student-body)]
+              (.write wrtr (str student-id ", " missing-classes "\n")))
+            (failure-summary! schedule faculty student-body faculty-per-cert)))))
 
 
