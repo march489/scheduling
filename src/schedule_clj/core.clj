@@ -2,17 +2,20 @@
   (:require [schedule-clj.generate :as g]
             [schedule-clj.data :as d]
             [clojure.set :as s]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [clojure.string :as str])
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
 
-(defn all-course-sections
-  "Returns a list of all sections in the schedule with the given course-id"
+(defn all-available-course-sections
+  "Returns a list of all sections in the schedule with the given course-id that have open space"
   [schedule course-id]
   (->> schedule
        vals
        (filter #(= course-id (:course-id %)))
+       (filter #(< (count (:roster %)) (:max-size %)))
+       (sort-by #(count (:roster %)))
        seq
        (map :period)))
 
@@ -23,6 +26,8 @@
        vals
        (filter #(= course-id (:course-id %)))
        (filter #(= period (:period %)))
+       (filter #(< (count (:roster %)) (:max-size %)))
+       (sort-by #(count (:roster %)))
        (map :section-id)
        first))
 
@@ -65,7 +70,7 @@
   (into {}
         (filter (fn [[_ section]] (contains? (:roster section) student-id)) schedule)))
 
-(defn find-non-overlapping-period
+(defn find-non-overlapping-periods
   [& pds]
   (let [find-single-period-complements (fn [pd] (partial (complement d/do-periods-overlap?) pd))
         filter-single-period (fn [coll pd] (filter (find-single-period-complements pd) coll))]
@@ -76,7 +81,7 @@
   (let [scheduled-periods (->> (get-teacher-schedule schedule teacher-id)
                                vals
                                (map #(:period %)))]
-    (apply find-non-overlapping-period scheduled-periods)))
+    (apply find-non-overlapping-periods scheduled-periods)))
 
 (defn can-teacher-take-section?
   "Determines if a teacher can add a section of the given course to their schedule, by checking 
@@ -108,7 +113,7 @@
   (let [scheduled-pds (->> (get-student-schedule schedule student-id)
                            vals
                            (map #(:period %)))]
-    (apply find-non-overlapping-period scheduled-pds)))
+    (apply find-non-overlapping-periods scheduled-pds)))
 
 (defn register-student-to-section
   "Updates the schedule to add a student to the roster for a section. If no such section exists,
@@ -172,21 +177,31 @@
 (defn schedule-student-required-classes
   [schedule faculty course-catalog student]
   (let [required-classes (seq (:requirements student))]
-    (reduce #(let [existing-section-ids (all-course-sections %1 %2)
+    (reduce #(let [existing-section-ids (all-available-course-sections %1 %2)
                    existing-periods (->> existing-section-ids
                                          (map schedule)
+                                         (sort-by (fn [section] (count (:roster section))) <)
                                          (map :period))
                    student-free-periods (->> student
                                              :student-id
-                                             (get-student-open-periods %1))]
-               (if-let [valid-period (some (set student-free-periods) existing-periods)]
+                                             (get-student-open-periods %1)
+                                             set)
+                   student-can-take-section? (fn [section] 
+                                               (contains? student-free-periods (:period section)))]
+               (if-let [valid-period
+                        (->> existing-periods
+                             (filter student-can-take-section?)
+                             first)
+                        ;; (first (filter (fn [section] (contains? student-free-periods (:period section))) existing-periods))
+                        ;; (some (set student-free-periods) existing-periods)
+                        ]
                  (register-student-to-section %1 student (lookup-section %1 %2 valid-period))
                  (let [updated-schedule (update-schedule-with-new-section %1
                                                                           faculty
                                                                           course-catalog
                                                                           %2
-                                                                          (first (sort student-free-periods)))
-                       new-section-id (lookup-section updated-schedule %2 (first (sort student-free-periods)))]
+                                                                          (first (sort (seq student-free-periods))))
+                       new-section-id (lookup-section updated-schedule %2 (first (sort (seq student-free-periods))))]
                    (register-student-to-section updated-schedule student new-section-id))))
             schedule
             required-classes)))
@@ -255,10 +270,10 @@
 (defn -main
   "launch!"
   []
-  (time (let [faculty-per-cert 5
-              test-course-catalog (g/generate-course-catalog 3366 10)
+  (time (let [faculty-per-cert 6
+              test-course-catalog (g/generate-course-catalog 3366 16)
               faculty (g/generate-faculty 1122 (vals test-course-catalog) faculty-per-cert)
-              student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 250)
+              student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 800)
               schedule (schedule-all-required-classes (create-all-lunch-sections {}) faculty test-course-catalog student-body)]
           (io/delete-file "./resources/output.txt")
           (with-open [wrtr (io/writer "./resources/output.txt" :append true)]
@@ -266,7 +281,12 @@
             (.write wrtr (str \newline "Results:\n"))
 
             (doseq [section (sort-by :required-cert  (sort-by #(first (:teachers %)) (vals schedule)))]
-              (.write wrtr (str "Teacher ID: " (first (:teachers section)) ", pd: " (:period section) ", subject: " (:required-cert section) ", enrollment: " (count (:roster section)) \newline)))
+              (.write wrtr (str "Teacher ID: " (str/join "" (take-last 12 (str (first (:teachers section)))))
+                                ", Course ID: " (str/join "" (take-last 12 (str (:course-id section))))
+                                ", pd: " (:period section)
+                                ", subject: " (:required-cert section)
+                                ", enrollment: " (count (:roster section)) 
+                                ", max: " (:max-size section) \newline)))            
             (doseq [student-id (keys student-body)]
               (.write wrtr (str "Student ID: " student-id "\n"))
               (doseq [[section-id section] (get-student-schedule schedule student-id)]
