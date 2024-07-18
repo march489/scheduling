@@ -28,7 +28,7 @@
        vals
        (filter #(= course-id (:course-id %)))
        (filter #(= period (:period %)))
-       (filter #(< (count (:roster %)) (:max-size %)))
+      ;;  (filter #(< (count (:roster %)) (:max-size %))) ;; MIGHT BE REDUNDANT
        (sort-by #(count (:roster %)))
        (map :section-id)
        first))
@@ -117,15 +117,69 @@
                            (map #(:period %)))]
     (apply find-non-overlapping-periods scheduled-pds)))
 
+(defn student-has-lunch?
+  [schedule student-id]
+  (->> (get-student-schedule schedule student-id)
+       vals
+       (map :course-id)
+       (filter #(= :lunch %))
+       seq))
+
+(defn register-student-to-lunch-section
+  [schedule student lunch-period]
+  (if lunch-period
+    (let [lunch-section-id (lookup-section schedule :lunch lunch-period)]
+      (do (println (str "Lunch period: " lunch-period ", Lunch section id: " lunch-section-id))
+          (update schedule lunch-section-id d/section-register-student student)))
+    (do (println (str "Lunch exception, student " (:student-id student)))
+        (st/print-cause-trace (Exception. "Null LUNCH section id"))
+        schedule)))
+
+#_(->> first-pass
+       vals
+       (filter #(= :lunch (:course-id %))))
+
+(defn lunch-section-available?
+  [schedule lunch-period]
+  (do (println "checking if lunch period has space: " lunch-period)
+      (->> lunch-period
+           (lookup-section schedule :lunch)
+           schedule
+           d/section-has-space?)))
+
+(defn verify-student-lunch
+  [schedule student]
+  (if (student-has-lunch? schedule (:student-id student))
+    schedule
+    (->> student
+         :student-id
+         (get-student-open-periods schedule)
+         (filter d/is-half-block?)
+         (filter #(lunch-section-available? schedule %))
+         sort
+         first
+         (register-student-to-lunch-section schedule student))))
+
+#_(->> :2501c750-face-277a-c110-91b394c7463c
+       student-body
+       :student-id
+       (get-student-open-periods first-pass)
+       (filter d/is-half-block?)
+       sort
+       first
+       (register-student-to-lunch-section first-pass (student-body :2501c750-face-277a-c110-91b394c7463c)))
+#_(verify-student-lunch first-pass (student-body :2501c750-face-277a-c110-91b394c7463c))
+
 (defn register-student-to-section
   "Updates the schedule to add a student to the roster for a section. If no such section exists,
    returns the existing schedule and fails to register the student."
   [schedule student section-id]
   (if section-id
     (if (section-id schedule)
-      (update schedule section-id d/section-register-student student)
-      (do (println "Schedule doesn't contain section")
-          schedule))
+      (-> schedule
+          (update section-id d/section-register-student student)
+          (verify-student-lunch student))
+      schedule)
     (do (st/print-cause-trace (Exception. "Null section id"))
         schedule)))
 
@@ -155,17 +209,9 @@
             (assign-teacher-to-section teacher (:section-id section))))
       schedule)))
 
-(defn student-has-lunch?
-  [schedule student-id]
-  (->> (get-student-schedule schedule student-id)
-       vals
-       (map :course-id)
-       (filter #(= :lunch %))
-       seq))
-
 (defn create-lunch-section
   [schedule period]
-  (let [lunch-period (d/initialize-lunch-period (random-uuid) period)]
+  (let [lunch-period (d/initialize-lunch-section (random-uuid) period)]
     (assoc schedule (:section-id lunch-period) lunch-period)))
 
 (defn create-all-lunch-sections
@@ -180,10 +226,10 @@
   "Given a list of section ids and a schedule, returns a list 
    of the periods those sections are scheduled for, sorted by roster size. "
   [schedule section-ids]
-   (->> section-ids
-        (map schedule)
-        sort-sections-by-class-size
-        (map :period)))
+  (->> section-ids
+       (map schedule)
+       sort-sections-by-class-size
+       (map :period)))
 
 (defn select-class-period
   [student-free-periods-set available-class-periods]
@@ -201,14 +247,15 @@
                                              :student-id
                                              (get-student-open-periods %1)
                                              set)]
-               (println (str "Current sections: " (str/join ", " existing-section-ids)))
-               (println (str "Current section pds: " (str/join ", " existing-periods)))
-               (println (str "Student free pds: " student-free-periods))
-               (println)
+              ;;  (println (str "Current sections: " (str/join ", " existing-section-ids)))
+              ;;  (println (str "Current section pds: " (str/join ", " existing-periods)))
+              ;;  (println (str "Student free pds: " student-free-periods))
+              ;;  (println)
                (if-let [valid-period (select-class-period student-free-periods existing-periods)]
-                 (do (println (str "valid per: " valid-period \newline))
-                     (println (str "Course ID = " %2))
-                     (register-student-to-section %1 student (lookup-section %1 %2 valid-period)))
+                ;;  (do (println (str "valid per: " valid-period \newline))
+                ;;      (println (str "Course ID = " %2))
+                ;;      (register-student-to-section %1 student (lookup-section %1 %2 valid-period)))
+                 (register-student-to-section %1 student (lookup-section %1 %2 valid-period))
                  (let [new-period (first (sort (seq student-free-periods)))
                        updated-schedule (create-new-section %1
                                                             faculty
@@ -252,10 +299,10 @@
   (println (str "Faculty (size): " (count faculty) ", Faculty/Cert: " faculty-per-cert))
   (println (str "No. of sections: " (count schedule)))
   (let [missing-classes (vals (get-all-missing-classes schedule student-body))
-        correctly-scheduled (count (filter #(<= (count %) 1) missing-classes))
-        missing-one (count (filter #(= 2 (count %)) missing-classes))
-        missing-two (count (filter #(= 3 (count %)) missing-classes))
-        missing-three (count (filter #(= 4 (count %)) missing-classes))
+        correctly-scheduled (- (count student-body) (count missing-classes))
+        missing-one (count (filter #(= 1 (count %)) missing-classes))
+        missing-two (count (filter #(= 2 (count %)) missing-classes))
+        missing-three (count (filter #(= 3 (count %)) missing-classes))
         missing-more (- (count missing-classes) correctly-scheduled missing-one missing-two missing-three)]
     (println (str "No. students fully scheduled: " correctly-scheduled "(" (float (/ correctly-scheduled (count student-body))) ")"))
     (println (str "No. students missing one: " missing-one))
@@ -273,13 +320,13 @@
 #_(def extra-student (val (first (take-last 1 student-body))))
 #_extra-student
 
-#_(def first-pass (schedule-all-required-classes {} faculty test-course-catalog student-body))
+#_(def first-pass (schedule-all-required-classes (create-all-lunch-sections {}) faculty test-course-catalog student-body))
 #_first-pass
 
 (defn -main
   "launch!"
   []
-  (time (let [faculty-per-cert 10
+  (time (let [faculty-per-cert 9
               test-course-catalog (g/generate-course-catalog 3366 55)
               faculty (g/generate-faculty 1122 (vals test-course-catalog) faculty-per-cert)
               student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 1400)
@@ -304,5 +351,7 @@
             (doseq [[student-id missing-classes] (get-all-missing-classes schedule student-body)]
               (.write wrtr (str student-id ", " missing-classes "\n")))
             (failure-summary! schedule faculty student-body faculty-per-cert)))))
+
+
 
 

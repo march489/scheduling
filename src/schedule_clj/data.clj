@@ -17,8 +17,7 @@
              :music
              :performance
              :sped
-             :ell
-            ))
+             :ell))
 
 (def PERIODS '(:1st-per
                :2nd-per
@@ -55,7 +54,14 @@
   (and (some #{pd} PERIODS)
        (not (is-half-block? pd))))
 
-(defn initialize-teacher
+(defn overlaps-with-lunch-period?
+  [pd]
+  (->> PERIODS
+       (filter is-half-block?)
+       (map #(do-periods-overlap? pd %))
+       (some identity)))
+
+(defn initialize-teacher`
   "Initializes a teacher with the minimum amount of data,
    intended to be chained together with functions that add/remove data"
   [id]
@@ -107,7 +113,7 @@
    :teachers #{}
    :roster #{}})
 
-(defn initialize-lunch-period
+(defn initialize-lunch-section
   [id period]
   {:section-id (keyword (str id))
    :course-id :lunch
@@ -209,6 +215,11 @@
 (defn section-register-student
   [section student]
   (update section :roster conj (:student-id student)))
+
+(defn section-has-space?
+  [section]
+  (do (println section) 
+      (< (count (:roster section)) (:max-size section))))
 
 (defn room-set-concurrency
   [room b?]
