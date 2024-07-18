@@ -3,10 +3,12 @@
             [schedule-clj.data :as d]
             [clojure.set :as s]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [clojure.stacktrace :as st])
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
+(def DEFAULT-ROOM-CAPACITY 25)
 
 (defn all-available-course-sections
   "Returns a list of all sections in the schedule with the given course-id that have open space"
@@ -17,10 +19,10 @@
        (filter #(< (count (:roster %)) (:max-size %)))
        (sort-by #(count (:roster %)))
        seq
-       (map :period)))
+       (map :section-id)))
 
 (defn lookup-section
-  "Returns the section map in the schedule with the given id"
+  "Returns the section ID in the schedule with the given id"
   [schedule course-id period]
   (->> schedule
        vals
@@ -31,10 +33,10 @@
        (map :section-id)
        first))
 
-(defn lookup-teacher
-  "Returns the teacher map in the faculty with the given id"
-  [faculty teacher-id]
-  (teacher-id faculty))
+;; (defn lookup-teacher
+;;   "Returns the teacher map in the faculty with the given id"
+;;   [faculty teacher-id]
+;;   (teacher-id faculty))
 
 (defn lookup-course
   "Returns the course map in the catalog with the given id"
@@ -124,7 +126,7 @@
       (update schedule section-id d/section-register-student student)
       (do (println "Schedule doesn't contain section")
           schedule))
-    (do (println "Null section id")
+    (do (st/print-cause-trace (Exception. "Null section id"))
         schedule)))
 
 (defn assign-teacher-to-section
@@ -132,22 +134,22 @@
   [schedule teacher section-id]
   (update schedule section-id d/section-assign-teacher teacher))
 
-(defn find-open-section-by-course-id
-  "Looks through the schedule to find if there already exists a section of the course offered."
-  [schedule course-id]
-  (->> schedule
-       vals
-       (filter #(= course-id (:course-id %)))
-       (filter #(< (count (:roster %)) (:max-size %)))
-       first
-       :section-id))
+;; (defn find-open-section-by-course-id
+;;   "Looks through the schedule to find if there already exists a section of the course offered."
+;;   [schedule course-id]
+;;   (->> schedule
+;;        vals
+;;        (filter #(= course-id (:course-id %)))
+;;        (filter #(< (count (:roster %)) (:max-size %)))
+;;        first
+;;        :section-id))
 
 (defn create-new-section
   "Updates the schedule to include a new section for a course if there's a teacher who can teach it."
   [schedule faculty course-catalog course-id period]
   (let [course (lookup-course course-catalog course-id)]
     (if-let [teacher (find-available-teacher schedule faculty course period)]
-      (let [section (d/initialize-section (random-uuid) course period (d/initialize-room "222" 30))]
+      (let [section (d/initialize-section (random-uuid) course period (d/initialize-room "222" DEFAULT-ROOM-CAPACITY))]
         (-> schedule
             (assoc (:section-id section) section)
             (assign-teacher-to-section teacher (:section-id section))))
@@ -170,47 +172,53 @@
   [schedule]
   (reduce create-lunch-section schedule '(:A-per :B-per :C-per :D-per)))
 
-(defn update-schedule-with-new-section
-  [schedule faculty course-catalog course-id period]
-  (create-new-section schedule faculty course-catalog course-id period))
+(defn sort-sections-by-class-size
+  [sections]
+  (sort-by #(count (:roster %)) < sections))
+
+(defn get-periods-from-section-ids
+  "Given a list of section ids and a schedule, returns a list 
+   of the periods those sections are scheduled for, sorted by roster size. "
+  [schedule section-ids]
+   (->> section-ids
+        (map schedule)
+        sort-sections-by-class-size
+        (map :period)))
+
+(defn select-class-period
+  [student-free-periods-set available-class-periods]
+  (->> available-class-periods
+       (filter #(contains? student-free-periods-set %))
+       sort
+       first))
 
 (defn schedule-student-required-classes
   [schedule faculty course-catalog student]
   (let [required-classes (seq (:requirements student))]
     (reduce #(let [existing-section-ids (all-available-course-sections %1 %2)
-                   existing-periods (->> existing-section-ids
-                                         (map schedule)
-                                         (sort-by (fn [section] (count (:roster section))) <)
-                                         (map :period))
+                   existing-periods (get-periods-from-section-ids %1 existing-section-ids)
                    student-free-periods (->> student
                                              :student-id
                                              (get-student-open-periods %1)
-                                             set)
-                   student-can-take-section? (fn [section] 
-                                               (contains? student-free-periods (:period section)))]
-               (if-let [valid-period
-                        (->> existing-periods
-                             (filter student-can-take-section?)
-                             first)
-                        ;; (first (filter (fn [section] (contains? student-free-periods (:period section))) existing-periods))
-                        ;; (some (set student-free-periods) existing-periods)
-                        ]
-                 (register-student-to-section %1 student (lookup-section %1 %2 valid-period))
-                 (let [updated-schedule (update-schedule-with-new-section %1
-                                                                          faculty
-                                                                          course-catalog
-                                                                          %2
-                                                                          (first (sort (seq student-free-periods))))
-                       new-section-id (lookup-section updated-schedule %2 (first (sort (seq student-free-periods))))]
+                                             set)]
+               (println (str "Current sections: " (str/join ", " existing-section-ids)))
+               (println (str "Current section pds: " (str/join ", " existing-periods)))
+               (println (str "Student free pds: " student-free-periods))
+               (println)
+               (if-let [valid-period (select-class-period student-free-periods existing-periods)]
+                 (do (println (str "valid per: " valid-period \newline))
+                     (println (str "Course ID = " %2))
+                     (register-student-to-section %1 student (lookup-section %1 %2 valid-period)))
+                 (let [new-period (first (sort (seq student-free-periods)))
+                       updated-schedule (create-new-section %1
+                                                            faculty
+                                                            course-catalog
+                                                            %2
+                                                            new-period)
+                       new-section-id (lookup-section updated-schedule %2 new-period)]
                    (register-student-to-section updated-schedule student new-section-id))))
             schedule
             required-classes)))
-
-#_(def first-student (first (vals student-body)))
-#_first-student
-#_(create-all-lunch-sections {})
-#_(def blank-schedule (create-all-lunch-sections {}))
-#_blank-schedule
 
 (defn schedule-all-required-classes
   [schedule faculty course-catalog student-body]
@@ -255,25 +263,26 @@
     (println (str "No. students missing three: " missing-three))
     (println (str "No. students missing more: " missing-more))))
 
-#_(def test-course-catalog (g/generate-course-catalog 3366 55))
+#_(def test-course-catalog (g/generate-course-catalog 3366 16))
 #_test-course-catalog
 
-#_(def faculty (g/generate-faculty 1122 (vals test-course-catalog)))
+#_(def faculty (g/generate-faculty 1122 (vals test-course-catalog) 6))
 #_faculty
 
-#_(def student-body (g/generate-student-body 2233 test-course-catalog 49))
-#_student-body
+#_(def student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 801))
+#_(def extra-student (val (first (take-last 1 student-body))))
+#_extra-student
 
 #_(def first-pass (schedule-all-required-classes {} faculty test-course-catalog student-body))
-#_(first first-pass)
+#_first-pass
 
 (defn -main
   "launch!"
   []
-  (time (let [faculty-per-cert 6
-              test-course-catalog (g/generate-course-catalog 3366 16)
+  (time (let [faculty-per-cert 10
+              test-course-catalog (g/generate-course-catalog 3366 55)
               faculty (g/generate-faculty 1122 (vals test-course-catalog) faculty-per-cert)
-              student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 800)
+              student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 1400)
               schedule (schedule-all-required-classes (create-all-lunch-sections {}) faculty test-course-catalog student-body)]
           (io/delete-file "./resources/output.txt")
           (with-open [wrtr (io/writer "./resources/output.txt" :append true)]
@@ -285,8 +294,8 @@
                                 ", Course ID: " (str/join "" (take-last 12 (str (:course-id section))))
                                 ", pd: " (:period section)
                                 ", subject: " (:required-cert section)
-                                ", enrollment: " (count (:roster section)) 
-                                ", max: " (:max-size section) \newline)))            
+                                ", enrollment: " (count (:roster section))
+                                ", max: " (:max-size section) \newline)))
             (doseq [student-id (keys student-body)]
               (.write wrtr (str "Student ID: " student-id "\n"))
               (doseq [[section-id section] (get-student-schedule schedule student-id)]

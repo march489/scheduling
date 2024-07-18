@@ -6,18 +6,18 @@
              :math
              :social-science
              :arabic
-            ;;  :mandarin
+             :mandarin
              :chemistry
-            ;;  :physics
-            ;;  :biology
-            ;;  :cte
-            ;;  :rotc
-            ;;  :visual
-            ;;  :dance
-            ;;  :music
-            ;;  :performance
-            ;;  :sped
-            ;;  :ell
+             :physics
+             :biology
+             :cte
+             :rotc
+             :visual
+             :dance
+             :music
+             :performance
+             :sped
+             :ell
             ))
 
 (def PERIODS '(:1st-per
