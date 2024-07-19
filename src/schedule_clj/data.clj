@@ -217,9 +217,8 @@
   (update section :roster conj (:student-id student)))
 
 (defn section-has-space?
-  [section]
-  (do (println section) 
-      (< (count (:roster section)) (:max-size section))))
+  [section] 
+  (< (count (:roster section)) (:max-size section)))
 
 (defn room-set-concurrency
   [room b?]

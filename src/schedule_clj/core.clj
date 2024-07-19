@@ -4,7 +4,8 @@
             [clojure.set :as s]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.stacktrace :as st])
+            ;; [clojure.stacktrace :as st]
+            )
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
@@ -129,23 +130,17 @@
   [schedule student lunch-period]
   (if lunch-period
     (let [lunch-section-id (lookup-section schedule :lunch lunch-period)]
-      (do (println (str "Lunch period: " lunch-period ", Lunch section id: " lunch-section-id))
-          (update schedule lunch-section-id d/section-register-student student)))
-    (do (println (str "Lunch exception, student " (:student-id student)))
-        (st/print-cause-trace (Exception. "Null LUNCH section id"))
-        schedule)))
-
-#_(->> first-pass
-       vals
-       (filter #(= :lunch (:course-id %))))
+      ;; (do (println (str "Lunch period: " lunch-period ", Lunch section id: " lunch-section-id))
+      ;;     (update schedule lunch-section-id d/section-register-student student))
+      (update schedule lunch-section-id d/section-register-student student))
+    schedule))
 
 (defn lunch-section-available?
   [schedule lunch-period]
-  (do (println "checking if lunch period has space: " lunch-period)
-      (->> lunch-period
-           (lookup-section schedule :lunch)
-           schedule
-           d/section-has-space?)))
+  (->> lunch-period
+       (lookup-section schedule :lunch)
+       schedule
+       d/section-has-space?))
 
 (defn verify-student-lunch
   [schedule student]
@@ -180,23 +175,13 @@
           (update section-id d/section-register-student student)
           (verify-student-lunch student))
       schedule)
-    (do (st/print-cause-trace (Exception. "Null section id"))
+    (do (Exception. (str "Null section id; missing course for sutdent " (:student-id student)))
         schedule)))
 
 (defn assign-teacher-to-section
   "Updates the schedule to assign a teacher to teach a specfic section."
   [schedule teacher section-id]
   (update schedule section-id d/section-assign-teacher teacher))
-
-;; (defn find-open-section-by-course-id
-;;   "Looks through the schedule to find if there already exists a section of the course offered."
-;;   [schedule course-id]
-;;   (->> schedule
-;;        vals
-;;        (filter #(= course-id (:course-id %)))
-;;        (filter #(< (count (:roster %)) (:max-size %)))
-;;        first
-;;        :section-id))
 
 (defn create-new-section
   "Updates the schedule to include a new section for a course if there's a teacher who can teach it."
@@ -278,17 +263,18 @@
 
 (defn get-student-missing-classes
   [schedule student]
-  (let [required-classes (conj (:requirements student) :lunch)
+  (let [required-classes  (:requirements student)
         scheduled-classes (map :course-id
                                (-> schedule
                                    (get-student-schedule (:student-id student))
                                    vals))]
-    (s/difference (set required-classes) (set scheduled-classes))))
+    (s/difference (conj (set required-classes) :lunch) (set scheduled-classes))))
 
 (defn get-all-missing-classes
   [schedule student-body]
-  (reduce #(when-let [missing-classes (seq (get-student-missing-classes schedule %2))]
-             (assoc %1 (:student-id %2) (set missing-classes)))
+  (reduce #(if-let [missing-classes (seq (get-student-missing-classes schedule %2))]
+             (assoc %1 (:student-id %2) (set missing-classes))
+             %1)
           {}
           (vals student-body)))
 
@@ -303,8 +289,9 @@
         missing-one (count (filter #(= 1 (count %)) missing-classes))
         missing-two (count (filter #(= 2 (count %)) missing-classes))
         missing-three (count (filter #(= 3 (count %)) missing-classes))
-        missing-more (- (count missing-classes) correctly-scheduled missing-one missing-two missing-three)]
-    (println (str "No. students fully scheduled: " correctly-scheduled "(" (float (/ correctly-scheduled (count student-body))) ")"))
+        missing-more (- (count missing-classes) missing-one missing-two missing-three)]
+    ;; (println (str "Missing classes raw: " missing-classes))
+    (println (str "No. students fully scheduled: " correctly-scheduled " (" (float (/ correctly-scheduled (count student-body))) ")"))
     (println (str "No. students missing one: " missing-one))
     (println (str "No. students missing two: " missing-two))
     (println (str "No. students missing three: " missing-three))
@@ -326,7 +313,7 @@
 (defn -main
   "launch!"
   []
-  (time (let [faculty-per-cert 9
+  (time (let [faculty-per-cert 10
               test-course-catalog (g/generate-course-catalog 3366 55)
               faculty (g/generate-faculty 1122 (vals test-course-catalog) faculty-per-cert)
               student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 1400)
@@ -351,7 +338,4 @@
             (doseq [[student-id missing-classes] (get-all-missing-classes schedule student-body)]
               (.write wrtr (str student-id ", " missing-classes "\n")))
             (failure-summary! schedule faculty student-body faculty-per-cert)))))
-
-
-
 
