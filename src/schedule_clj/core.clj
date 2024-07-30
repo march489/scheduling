@@ -4,12 +4,13 @@
             [clojure.set :as s]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [clojure.data.generators :as gen]
             ;; [clojure.stacktrace :as st]
             )
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
-(def DEFAULT-ROOM-CAPACITY 22)
+(def DEFAULT-ROOM-CAPACITY 25)
 
 (defn all-available-course-sections
   "Returns a list of all sections in the schedule with the given course-id that have open space"
@@ -217,6 +218,15 @@
        sort
        first))
 
+(defn choose-new-period
+  [course-catalog course-id student-free-periods]
+  (let [cert (:required-cert (course-id course-catalog))]
+    (cond (d/SCIENCE-CLASSES cert) (first (sort (seq student-free-periods)))
+          (d/ART-CLASSES cert) (first (sort (seq student-free-periods)))
+          (d/MATH-CLASSES cert) (last (sort (seq student-free-periods)))
+          (d/LANGUAGE-CLASSES cert) (last (sort (seq student-free-periods)))
+          :else (first (gen/shuffle (seq student-free-periods))))))
+
 (defn schedule-student-required-classes
   [schedule faculty course-catalog student]
   (let [required-classes (seq (:requirements student))]
@@ -235,7 +245,7 @@
                 ;;      (println (str "Course ID = " %2))
                 ;;      (register-student-to-section %1 student (lookup-section %1 %2 valid-period)))
                  (register-student-to-section %1 student (lookup-section %1 %2 valid-period))
-                 (let [new-period (first (sort (seq student-free-periods)))
+                 (let [new-period (choose-new-period course-catalog %2 student-free-periods)
                        updated-schedule (create-new-section %1
                                                             faculty
                                                             course-catalog

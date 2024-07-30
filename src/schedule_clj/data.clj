@@ -22,10 +22,12 @@
 (def SCIENCE-CLASSES #{:chemistry
                        :physics
                        :biology})
-
 (def ART-CLASSES #{:visual
                    :dance
-                   :music})
+                   :music
+                   :performance})
+(def LANGUAGE-CLASSES #{:mandarin :arabic})
+(def MATH-CLASSES #{:math})
 
 (def PERIODS '(:1st-per
                :2nd-per
