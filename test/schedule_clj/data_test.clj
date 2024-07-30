@@ -2,22 +2,7 @@
   (:require [schedule-clj.data :as d]
             [clojure.data.generators :as g]
             [clojure.test :refer [deftest is testing]]
-            [schedule-clj.dao :as dao]
             [clojure.math.combinatorics :as c]))
-
-;; Easy dummys for testing
-(def SAMPLE-ID (g/uuid))
-(def SAMPLE-NAME (g/uuid))
-(def SAMPLE-LOOKUP-RESULT (list {:teacher_id (str SAMPLE-ID)
-                                 :name (str SAMPLE-NAME)
-                                 :max_classes 5,
-                                 :teacher_id_2 (str SAMPLE-ID)
-                                 :cert ":math"}
-                                {:teacher_id (str SAMPLE-ID)
-                                 :name (str SAMPLE-NAME)
-                                 :max_classes 5,
-                                 :teacher_id_2 (str SAMPLE-ID)
-                                 :cert ":social-science"}))
 
 ((deftest do-periods-overlap?-test
    (testing "Do we have the correct pairs of overlapping periods?"
@@ -153,12 +138,3 @@
           (is (d/teacher-has-cert? teacher :physics))
           (is (not (d/teacher-has-cert? teacher :iep)))
           (is (not (d/teacher-has-cert? teacher :mandarin))))))))
-
-(deftest teacher-lookup-test
-  (testing "Does `teacher-lookup` correctly process incoming data"
-    (with-redefs-fn {#'dao/teacher-lookup (fn [_ _] SAMPLE-LOOKUP-RESULT)}
-      #(is (= (d/teacher-lookup-db SAMPLE-ID)
-              (-> (d/initialize-teacher SAMPLE-ID)
-                  (d/teacher-add-cert :math)
-                  (d/teacher-add-cert :social-science)))))))
-

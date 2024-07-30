@@ -1,6 +1,4 @@
-(ns schedule-clj.data
-  (:require [schedule-clj.dao :as dao]
-            [clojure.string :as str]))
+(ns schedule-clj.data)
 
 (def CERTS '(:english
              :math
@@ -18,7 +16,6 @@
              :performance
              :sped
              :ell))
-
 (def SCIENCE-CLASSES #{:chemistry
                        :physics
                        :biology})
@@ -71,8 +68,7 @@
        (map #(do-periods-overlap? pd %))
        (some identity)))
 
-(defn initialize-teacher`
-  "Initializes a teacher with the minimum amount of data,
+(defn initialize-teacher `"Initializes a teacher with the minimum amount of data,
    intended to be chained together with functions that add/remove data"
   [id]
   {:teacher-id (keyword (str id))
@@ -164,26 +160,6 @@
   [teacher cert]
   (contains? (:certs teacher) cert))
 
-(defn teacher-count-preps-db
-  [teacher]
-  (dao/count-teacher-preps teacher))
-
-(defn teacher-count-sections-db
-  [teacher]
-  (dao/count-teacher-sections teacher))
-
-(defn teacher-lookup-db
-  [teacher-id]
-  (when-let [results (seq (dao/teacher-lookup dao/db (str teacher-id)))]
-    (-> (initialize-teacher teacher-id)
-        (teacher-set-max-classes (-> results
-                                     first
-                                     :max_classes))
-        (teacher-add-cert-list (->> results
-                                    (map :cert)
-                                    (map #(str/replace % ":" ""))
-                                    (map keyword))))))
-
 (defn student-add-required-class
   [student new-class]
   (update student :requirements conj new-class))
@@ -229,7 +205,7 @@
   (update section :roster conj (:student-id student)))
 
 (defn section-has-space?
-  [section] 
+  [section]
   (< (count (:roster section)) (:max-size section)))
 
 (defn room-set-concurrency

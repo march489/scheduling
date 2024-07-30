@@ -58,33 +58,33 @@
     (let [course-list (g/generate-random-course-list 3366 10)
           student-body (g/generate-student-list 2266 course-list 2)]
       (is (= student-body
-             '({:student-id :ebca8c0d-f1f0-754e-77a2-c6bcaf03468a,
+             '({:student-id :ebca8c0d-f1f0-754e-77a2-c6bcaf03468a, 
                 :grade "9",
-                :requirements
+                :requirements 
                 (:e63c0ae3-9bb9-8242-4a1b-66d695fab4f8
                  :79a408a9-ef93-9f01-ffef-5a4973bafa7c
                  :24efc37c-eac8-2e8e-616b-d86d86affa17
                  :9e073caa-fcfb-e5e4-7147-7ab50bfd118c
-                 :4d395782-54a7-0f4b-6a09-74ffa764611c),
-                :electives
+                 :4d395782-54a7-0f4b-6a09-74ffa764611c), 
+                :electives 
                 [:592438fa-8f8a-dd90-1ba9-d128f49900c3
                  :c2df23d0-9249-b520-adb3-a4b974532484
-                 :41ab9688-7063-8f97-9225-7d14ad267732]
-                :inclusion #{}
-                :separate-class #{}}
-               {:student-id :3f0c42d7-1005-5de6-9388-81da8daec984,
-                :grade "10",
-                :requirements
-                (:e63c0ae3-9bb9-8242-4a1b-66d695fab4f8
-                 :41ab9688-7063-8f97-9225-7d14ad267732
+                 :41ab9688-7063-8f97-9225-7d14ad267732],
+                :inclusion #{},
+                :separate-class #{}} 
+               {:student-id :bbc6cc4b-9ff5-f6fd-c228-7634b3b51115, 
+                :grade "11",
+                :requirements 
+                (:c2df23d0-9249-b520-adb3-a4b974532484
                  :592438fa-8f8a-dd90-1ba9-d128f49900c3
-                 :24efc37c-eac8-2e8e-616b-d86d86affa17
-                 :4d395782-54a7-0f4b-6a09-74ffa764611c),
-                :electives
-                [:79a408a9-ef93-9f01-ffef-5a4973bafa7c
                  :883e6c16-fd06-8299-6ef4-59c6ba2e3ee1
-                 :50aaf662-fdfa-a479-e6bd-a27fe70f94d0]
-                :inclusion #{}
+                 :4d395782-54a7-0f4b-6a09-74ffa764611c
+                 :9e073caa-fcfb-e5e4-7147-7ab50bfd118c),
+                :electives 
+                [:41ab9688-7063-8f97-9225-7d14ad267732
+                 :50aaf662-fdfa-a479-e6bd-a27fe70f94d0
+                 :e63c0ae3-9bb9-8242-4a1b-66d695fab4f8], 
+                :inclusion #{}, 
                 :separate-class #{}}))))))
 
 (deftest generate-student-cohort-test

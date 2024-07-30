@@ -4,9 +4,7 @@
             [clojure.set :as s]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.data.generators :as gen]
-            ;; [clojure.stacktrace :as st]
-            )
+            [clojure.data.generators :as gen])
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
@@ -69,12 +67,14 @@
         (filter (fn [[_ section]] (contains? (:roster section) student-id)) schedule)))
 
 (defn find-non-overlapping-periods
+  "Returns a list of all periods that don't overlap with any in the passed list."
   [& pds]
   (let [find-single-period-complements (fn [pd] (partial (complement d/do-periods-overlap?) pd))
         filter-single-period (fn [coll pd] (filter (find-single-period-complements pd) coll))]
     (reduce #(filter-single-period %1 %2) d/PERIODS pds)))
 
 (defn get-teacher-open-periods
+  "Finds periods that teachers have open in their schedules for a new section. "
   [schedule teacher-id]
   (let [scheduled-periods (->> (get-teacher-schedule schedule teacher-id)
                                vals
@@ -107,6 +107,7 @@
        first))
 
 (defn get-student-open-periods
+  "Gets the currently open periods in the student's schedule."
   [schedule student-id]
   (let [scheduled-pds (->> (get-student-schedule schedule student-id)
                            vals
@@ -114,6 +115,7 @@
     (apply find-non-overlapping-periods scheduled-pds)))
 
 (defn student-has-lunch?
+  "Has the student been assigned to a lunch section?"
   [schedule student-id]
   (->> (get-student-schedule schedule student-id)
        vals
@@ -122,6 +124,7 @@
        seq))
 
 (defn register-student-to-lunch-section
+  "Assign the student to a given lunch section."
   [schedule student lunch-period]
   (if lunch-period
     (let [lunch-section-id (lookup-section schedule :lunch lunch-period)]
@@ -131,6 +134,7 @@
     schedule))
 
 (defn lunch-section-available?
+  "Does the lunch schedule have space for an additional student?"
   [schedule lunch-period]
   (->> lunch-period
        (lookup-section schedule :lunch)
@@ -138,6 +142,8 @@
        d/section-has-space?))
 
 (defn verify-student-lunch
+  "Checks if a student has been assigned to a lunch section,
+   and if not, assigns them to an open lunch section."
   [schedule student]
   (if (student-has-lunch? schedule (:student-id student))
     schedule
@@ -190,15 +196,18 @@
       schedule)))
 
 (defn create-lunch-section
+  "Creates a new lunch section during the specified period."
   [schedule period]
   (let [lunch-period (d/initialize-lunch-section (random-uuid) period)]
     (assoc schedule (:section-id lunch-period) lunch-period)))
 
 (defn create-all-lunch-sections
+  "Creates a lunch section for each half-block"
   [schedule]
   (reduce create-lunch-section schedule '(:A-per :B-per :C-per :D-per)))
 
 (defn sort-sections-by-class-size
+  "Sorts a list of sections by their roster size."
   [sections]
   (sort-by #(count (:roster %)) < sections))
 
@@ -212,6 +221,9 @@
        (map :period)))
 
 (defn select-class-period
+  "Returns an existing class period that overlaps with an open slot
+   in the student's schedule, indicating the student can add that class at that time slot.
+   Otherwise, returns nil."
   [student-free-periods-set available-class-periods]
   (->> available-class-periods
        (filter #(contains? student-free-periods-set %))
@@ -219,6 +231,8 @@
        first))
 
 (defn choose-new-period
+  "Chooses a period for a new section ceing created in the schedule. Selectively chooses
+   long or short blocks for certain departments."
   [course-catalog course-id student-free-periods]
   (let [cert (:required-cert (course-id course-catalog))]
     (cond (d/SCIENCE-CLASSES cert) (first (sort (seq student-free-periods)))
@@ -228,6 +242,9 @@
           :else (first (gen/shuffle (seq student-free-periods))))))
 
 (defn schedule-student-required-classes
+  "Registers students to their required classes. If a section of a required class 
+   doesn't already exist, this will create a new section in an open slot 
+   in the student's schedule and assign the student to that class."
   [schedule faculty course-catalog student]
   (let [required-classes (seq (:requirements student))]
     (reduce #(let [existing-section-ids (all-available-course-sections %1 %2)
@@ -257,6 +274,7 @@
             required-classes)))
 
 (defn schedule-all-required-classes
+  "Schedules all students in the student body to their required classes."
   [schedule faculty course-catalog student-body]
   (reduce #(schedule-student-required-classes %1
                                               faculty
