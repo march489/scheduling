@@ -19,6 +19,14 @@
              :sped
              :ell))
 
+(def SCIENCE-CLASSES #{:chemistry
+                       :physics
+                       :biology})
+
+(def ART-CLASSES #{:visual
+                   :dance
+                   :music})
+
 (def PERIODS '(:1st-per
                :2nd-per
                :3rd-per
@@ -76,7 +84,9 @@
   {:student-id (keyword (str id))
    :grade grade
    :requirements '()
-   :electives []})
+   :electives []
+   :inclusion #{}
+   :separate-class #{}})
 
 (defn initialize-course
   "Defines a course, including its upper and lower limits.

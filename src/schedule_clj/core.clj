@@ -9,7 +9,7 @@
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
-(def DEFAULT-ROOM-CAPACITY 25)
+(def DEFAULT-ROOM-CAPACITY 22)
 
 (defn all-available-course-sections
   "Returns a list of all sections in the schedule with the given course-id that have open space"
@@ -29,15 +29,9 @@
        vals
        (filter #(= course-id (:course-id %)))
        (filter #(= period (:period %)))
-      ;;  (filter #(< (count (:roster %)) (:max-size %))) ;; MIGHT BE REDUNDANT
        (sort-by #(count (:roster %)))
        (map :section-id)
        first))
-
-;; (defn lookup-teacher
-;;   "Returns the teacher map in the faculty with the given id"
-;;   [faculty teacher-id]
-;;   (teacher-id faculty))
 
 (defn lookup-course
   "Returns the course map in the catalog with the given id"

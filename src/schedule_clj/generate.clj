@@ -2,6 +2,9 @@
   (:require [schedule-clj.data :as d]
             [clojure.data.generators :as g]))
 
+(def IEP-FREQ 0.22)
+(def SEPARATE-CLASS-FREQ 0.05)
+
 (defn generate-random-course
   "Generates a course with a random uuid and a random required cert,
    but always with a min class size of 20 and a max class size of 30.
@@ -79,6 +82,20 @@
                  (generate-random-course-with-limits)
                  (generate-random-course)))))))))
 
+(defn generate-student-with-iep
+  "Takes a student, and with probability `IEP-FREQ` adds special education minutes in one of two ways:
+   Either an inclusion class or a separate class."
+  [student]
+  (let [courses (take (count (take-while #(< % IEP-FREQ) 
+                                         (repeatedly g/float)))
+                      (g/shuffle (concat (:requirements student) (:electives student))))]
+    (reduce #(update %1 (if (< (g/float) SEPARATE-CLASS-FREQ) :separate-class :inclusion) conj %2)
+            student
+            courses)))
+
+#_(generate-student-with-iep (generate-random-student 2233 (vals (generate-course-catalog 1166  20))))
+
+
 (defn generate-random-student
   "Generates a student with a random uuid and random required classes 
    and random elective choices selected from a given `course-list`. If run with a seed,
@@ -88,16 +105,17 @@
      (binding [g/*rnd* r]
        (generate-random-student course-list))))
   ([course-list]
-   (loop
-    [student (d/initialize-student (g/uuid) (str (g/uniform 7 13)))
-     course-list course-list]
-     (let [new-class (g/rand-nth course-list)]
-       (cond
-         (= 3 (count (:electives student))) student
-         (< (count (:requirements student)) 5) (recur (d/student-add-required-class student (:course-id new-class))
-                                                      (remove #{new-class} course-list))
-         :else (recur (d/student-add-elective student (:course-id new-class))
-                      (remove #{new-class} course-list)))))))
+   (-> (loop
+        [student (d/initialize-student (g/uuid) (str (g/uniform 7 13)))
+         course-list course-list]
+         (let [new-class (g/rand-nth course-list)]
+           (cond
+             (= 3 (count (:electives student))) student
+             (< (count (:requirements student)) 5) (recur (d/student-add-required-class student (:course-id new-class))
+                                                          (remove #{new-class} course-list))
+             :else (recur (d/student-add-elective student (:course-id new-class))
+                          (remove #{new-class} course-list)))))
+       generate-student-with-iep)))
 
 #_(generate-random-student (generate-random-course-list 10))
 

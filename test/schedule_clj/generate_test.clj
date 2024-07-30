@@ -49,7 +49,9 @@
               :electives
               [:592438fa-8f8a-dd90-1ba9-d128f49900c3
                :c2df23d0-9249-b520-adb3-a4b974532484
-               :41ab9688-7063-8f97-9225-7d14ad267732]})))))
+               :41ab9688-7063-8f97-9225-7d14ad267732]
+              :inclusion #{}
+              :separate-class #{}})))))
 
 (deftest generate-student-body-test
   (testing "Do we consistently generate the same student body with their preferences?"
@@ -67,7 +69,9 @@
                 :electives
                 [:592438fa-8f8a-dd90-1ba9-d128f49900c3
                  :c2df23d0-9249-b520-adb3-a4b974532484
-                 :41ab9688-7063-8f97-9225-7d14ad267732]}
+                 :41ab9688-7063-8f97-9225-7d14ad267732]
+                :inclusion #{}
+                :separate-class #{}}
                {:student-id :3f0c42d7-1005-5de6-9388-81da8daec984,
                 :grade "10",
                 :requirements
@@ -79,7 +83,9 @@
                 :electives
                 [:79a408a9-ef93-9f01-ffef-5a4973bafa7c
                  :883e6c16-fd06-8299-6ef4-59c6ba2e3ee1
-                 :50aaf662-fdfa-a479-e6bd-a27fe70f94d0]}))))))
+                 :50aaf662-fdfa-a479-e6bd-a27fe70f94d0]
+                :inclusion #{}
+                :separate-class #{}}))))))
 
 (deftest generate-student-cohort-test
   (testing "Does `generate-student-cohort` consistently generate a cohort of students with unique ids but are otherwise identical?"
@@ -97,7 +103,9 @@
                 :electives
                 [:592438fa-8f8a-dd90-1ba9-d128f49900c3
                  :c2df23d0-9249-b520-adb3-a4b974532484
-                 :41ab9688-7063-8f97-9225-7d14ad267732]}
+                 :41ab9688-7063-8f97-9225-7d14ad267732]
+                :inclusion #{}
+                :separate-class #{}}
                {:student-id :775eb82a-390e-38c4-8d5c-ab5549eb52dc,
                 :grade "9",
                 :requirements
@@ -109,7 +117,9 @@
                 :electives
                 [:592438fa-8f8a-dd90-1ba9-d128f49900c3
                  :c2df23d0-9249-b520-adb3-a4b974532484
-                 :41ab9688-7063-8f97-9225-7d14ad267732]}
+                 :41ab9688-7063-8f97-9225-7d14ad267732]
+                :inclusion #{}
+                :separate-class #{}}
                {:student-id :02b6dba4-022e-cb7d-7126-8ec6899ff739,
                 :grade "9",
                 :requirements
@@ -121,4 +131,6 @@
                 :electives
                 [:592438fa-8f8a-dd90-1ba9-d128f49900c3
                  :c2df23d0-9249-b520-adb3-a4b974532484
-                 :41ab9688-7063-8f97-9225-7d14ad267732]}))))))
+                 :41ab9688-7063-8f97-9225-7d14ad267732]
+                :inclusion #{}
+                :separate-class #{}}))))))
