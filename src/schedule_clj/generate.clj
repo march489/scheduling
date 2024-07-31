@@ -2,8 +2,8 @@
   (:require [schedule-clj.data :as d]
             [clojure.data.generators :as g]))
 
-(def IEP-FREQ 0.22)
-(def SEPARATE-CLASS-FREQ 0.05)
+(def IEP-FREQ 0.03)
+(def SEPARATE-CLASS-FREQ 0.1)
 
 (defn generate-random-course
   "Generates a course with a random uuid and a random required cert,
