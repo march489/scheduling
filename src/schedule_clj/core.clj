@@ -156,16 +156,6 @@
          first
          (register-student-to-lunch-section schedule student))))
 
-#_(->> :2501c750-face-277a-c110-91b394c7463c
-       student-body
-       :student-id
-       (get-student-open-periods first-pass)
-       (filter d/is-half-block?)
-       sort
-       first
-       (register-student-to-lunch-section first-pass (student-body :2501c750-face-277a-c110-91b394c7463c)))
-#_(verify-student-lunch first-pass (student-body :2501c750-face-277a-c110-91b394c7463c))
-
 (defn register-student-to-section
   "Updates the schedule to add a student to the roster for a section. If no such section exists,
    returns the existing schedule and fails to register the student."
@@ -241,35 +231,33 @@
           (d/LANGUAGE-CLASSES cert) (last (sort (seq student-free-periods)))
           :else (first (gen/shuffle (seq student-free-periods))))))
 
+(defn schedule-single-student-class
+  "Registers a student to a section of a single course ID."
+  [schedule faculty course-catalog course-id student]
+  (let [existing-section-ids (all-available-course-sections schedule course-id)
+        existing-periods (get-periods-from-section-ids schedule existing-section-ids)
+        student-free-periods (->> student
+                                  :student-id
+                                  (get-student-open-periods schedule)
+                                  set)]
+    (if-let [valid-period (select-class-period student-free-periods existing-periods)]
+      (register-student-to-section schedule student (lookup-section schedule course-id valid-period))
+      (let [new-period (choose-new-period course-catalog course-id student-free-periods)
+            updated-schedule (create-new-section schedule
+                                                 faculty
+                                                 course-catalog
+                                                 course-id
+                                                 new-period)
+            new-section-id (lookup-section updated-schedule course-id new-period)]
+        (register-student-to-section updated-schedule student new-section-id)))))
+
 (defn schedule-student-required-classes
   "Registers students to their required classes. If a section of a required class 
    doesn't already exist, this will create a new section in an open slot 
    in the student's schedule and assign the student to that class."
   [schedule faculty course-catalog student]
   (let [required-classes (seq (:requirements student))]
-    (reduce #(let [existing-section-ids (all-available-course-sections %1 %2)
-                   existing-periods (get-periods-from-section-ids %1 existing-section-ids)
-                   student-free-periods (->> student
-                                             :student-id
-                                             (get-student-open-periods %1)
-                                             set)]
-              ;;  (println (str "Current sections: " (str/join ", " existing-section-ids)))
-              ;;  (println (str "Current section pds: " (str/join ", " existing-periods)))
-              ;;  (println (str "Student free pds: " student-free-periods))
-              ;;  (println)
-               (if-let [valid-period (select-class-period student-free-periods existing-periods)]
-                ;;  (do (println (str "valid per: " valid-period \newline))
-                ;;      (println (str "Course ID = " %2))
-                ;;      (register-student-to-section %1 student (lookup-section %1 %2 valid-period)))
-                 (register-student-to-section %1 student (lookup-section %1 %2 valid-period))
-                 (let [new-period (choose-new-period course-catalog %2 student-free-periods)
-                       updated-schedule (create-new-section %1
-                                                            faculty
-                                                            course-catalog
-                                                            %2
-                                                            new-period)
-                       new-section-id (lookup-section updated-schedule %2 new-period)]
-                   (register-student-to-section updated-schedule student new-section-id))))
+    (reduce #(schedule-single-student-class %1 faculty course-catalog %2 student)
             schedule
             required-classes)))
 
@@ -281,7 +269,7 @@
                                               course-catalog
                                               %2)
           schedule
-          (vals student-body)))
+          (sort-by :priority > (vals student-body))))
 
 (defn get-student-missing-classes
   [schedule student]
@@ -318,19 +306,6 @@
     (println (str "No. students missing two: " missing-two))
     (println (str "No. students missing three: " missing-three))
     (println (str "No. students missing more: " missing-more))))
-
-#_(def test-course-catalog (g/generate-course-catalog 3366 16))
-#_test-course-catalog
-
-#_(def faculty (g/generate-faculty 1122 (vals test-course-catalog) 6))
-#_faculty
-
-#_(def student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 801))
-#_(def extra-student (val (first (take-last 1 student-body))))
-#_extra-student
-
-#_(def first-pass (schedule-all-required-classes (create-all-lunch-sections {}) faculty test-course-catalog student-body))
-#_first-pass
 
 (defn -main
   "launch!"

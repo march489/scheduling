@@ -17,8 +17,6 @@
      (binding [g/*rnd* r]
        (d/initialize-course (g/uuid) (g/rand-nth d/CERTS))))))
 
-#_(generate-random-course)
-
 (defn generate-random-course-with-limits
   "Generates a course with a random uuid and random 
    upper and lower class size limits. If run with a seed,
@@ -37,8 +35,6 @@
          (-> (generate-random-course)
              (d/course-set-min low)
              (d/course-set-max high)))))))
-
-#_(generate-random-course-with-limits)
 
 (defn generate-random-course-list
   "Generates a list of `num-courses` random courses, 
@@ -62,8 +58,6 @@
              (generate-random-course-with-limits)
              (generate-random-course))))))))
 
-#_(generate-random-course-list 5)
-
 #_(comment
     "NOTE: The function below doesn't produce reproducible randomness
    starting from a given seed. When a lazy sequence is involved
@@ -86,15 +80,12 @@
   "Takes a student, and with probability `IEP-FREQ` adds special education minutes in one of two ways:
    Either an inclusion class or a separate class."
   [student]
-  (let [courses (take (count (take-while #(< % IEP-FREQ) 
+  (let [courses (take (count (take-while #(< % IEP-FREQ)
                                          (repeatedly g/float)))
                       (g/shuffle (concat (:requirements student) (:electives student))))]
     (reduce #(update %1 (if (< (g/float) SEPARATE-CLASS-FREQ) :separate-class :inclusion) conj %2)
             student
             courses)))
-
-#_(generate-student-with-iep (generate-random-student 2233 (vals (generate-course-catalog 1166  20))))
-
 
 (defn generate-random-student
   "Generates a student with a random uuid and random required classes 
@@ -115,9 +106,11 @@
                                                           (remove #{new-class} course-list))
              :else (recur (d/student-add-elective student (:course-id new-class))
                           (remove #{new-class} course-list)))))
-       generate-student-with-iep)))
+       generate-student-with-iep
+       d/student-set-priority)))
 
-#_(generate-random-student (generate-random-course-list 10))
+#_(filter #(or (seq (:inclusion %)) (seq (:separate-class %))) 
+          (vals (generate-heterogeneous-student-body 2233 (generate-course-catalog 3366 55) 1400)))
 
 (defn generate-student-list
   "Generates a full student body of random students with random selected required classes
@@ -126,8 +119,6 @@
   (let [r (java.util.Random. seed)]
     (repeatedly num-students #(binding [g/*rnd* r] (generate-random-student course-list)))))
 
-#_(generate-student-list 2266 (generate-random-course-list 20) 2)
-
 (defn generate-student-cohort-list
   "Generates a cohort of students with unique student-ids but otherwise identical in terms of
    grade level, required classes, and electives."
@@ -135,9 +126,6 @@
   (let [student (generate-random-student seed course-list)
         r (java.util.Random. seed)]
     (map #(assoc student :student-id (keyword (str %))) (repeatedly num-students #(binding [g/*rnd* r] (g/uuid))))))
-
-#_(generate-random-student 2266 (generate-random-course-list 3366 10))
-#_(generate-student-cohort-list 2266 (generate-random-course-list 3366 10) 3)
 
 (defn make-super-map
   "Given a list of `maps`, creates a new map where the vals are the maps from 
@@ -166,8 +154,6 @@
                      (map #(-> (binding [g/*rnd* r] (g/uuid)) d/initialize-teacher (d/teacher-add-cert %))
                           needed-certs))
                    :teacher-id)))
-
-#_(generate-faculty 2266 (generate-random-course-list 3366 10) 2)
 
 (defn generate-section
   [course period room]

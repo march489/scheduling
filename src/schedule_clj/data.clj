@@ -68,7 +68,8 @@
        (map #(do-periods-overlap? pd %))
        (some identity)))
 
-(defn initialize-teacher `"Initializes a teacher with the minimum amount of data,
+(defn initialize-teacher
+  "Initializes a teacher with the minimum amount of data,
    intended to be chained together with functions that add/remove data"
   [id]
   {:teacher-id (keyword (str id))
@@ -83,6 +84,7 @@
    :grade grade
    :requirements '()
    :electives []
+   :priority 0
    :inclusion #{}
    :separate-class #{}})
 
@@ -159,6 +161,13 @@
    a string or a keyword"
   [teacher cert]
   (contains? (:certs teacher) cert))
+
+(defn student-set-priority
+  [student]
+  (-> student
+      (assoc :priority 0)
+      (update :priority + (count (:inclusion student)))
+      (update :priority + (* 5 (count (:separate-class student))))))
 
 (defn student-add-required-class
   [student new-class]
