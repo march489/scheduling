@@ -1,21 +1,20 @@
 (ns schedule-clj.data)
 
-(def CERTS '(:english
-             :math
-             :social-science
-             :arabic
-             :mandarin
-             :chemistry
-             :physics
-             :biology
-             :cte
-             :rotc
-             :visual
-             :dance
-             :music
-             :performance
-             :sped
-             :ell))
+(def COURSE-CERTS '(:english
+                    :math
+                    :social-science
+                    :arabic
+                    :mandarin
+                    :chemistry
+                    :physics
+                    :biology
+                    :cte
+                    :rotc
+                    :visual
+                    :dance
+                    :music
+                    :performance))
+(def TEACHER-CERTS (concat COURSE-CERTS '(:sped :ell)))
 (def SCIENCE-CLASSES #{:chemistry
                        :physics
                        :biology})
@@ -131,7 +130,17 @@
    :teachers #{}
    :period period
    :roster #{}
-   :max-size 350})
+   :max-size 360})
+
+(defn initialize-sped-seminar
+  [id period]
+  {:section-id (keyword (str id))
+   :course-id :seminar
+   :required-cert :iep
+   :teachers #{}
+   :period period
+   :roster #{}
+   :max-size 20})
 
 (defn teacher-set-max-classes
   "Updates the teacher to now have a new maximum class limit"
@@ -141,7 +150,7 @@
 (defn teacher-add-cert
   "Adds a certification to a teacher"
   [teacher new-cert]
-  (if-let [c (some #{new-cert} CERTS)]
+  (if-let [c (some #{new-cert} COURSE-CERTS)]
     (update teacher :certs conj c)
     teacher))
 

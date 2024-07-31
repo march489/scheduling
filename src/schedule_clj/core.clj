@@ -152,7 +152,7 @@
          (get-student-open-periods schedule)
          (filter d/is-half-block?)
          (filter #(lunch-section-available? schedule %))
-         sort
+         shuffle
          first
          (register-student-to-lunch-section schedule student))))
 
@@ -191,10 +191,29 @@
   (let [lunch-period (d/initialize-lunch-section (random-uuid) period)]
     (assoc schedule (:section-id lunch-period) lunch-period)))
 
+(defn create-seminar-section
+  "Creates a new sped seminar section during the specified period."
+  [schedule period]
+  (let [seminar-period (d/initialize-sped-seminar (random-uuid) period)]
+    (assoc schedule (:section-id seminar-period) seminar-period)))
+
 (defn create-all-lunch-sections
   "Creates a lunch section for each half-block"
   [schedule]
   (reduce create-lunch-section schedule '(:A-per :B-per :C-per :D-per)))
+
+(defn create-all-seminar-sections
+  "Creates a seminar section for each half-block"
+  [schedule]
+  (reduce create-seminar-section schedule '(:A-per :B-per :C-per :D-per)))
+
+(defn initialize-blank-schedule
+  "Creates a blank schedule with the required singleton classes,
+   i.e. sped seminars and lunch sections during each half-block."
+  []
+  (-> {}
+      create-all-lunch-sections
+      create-all-seminar-sections))
 
 (defn sort-sections-by-class-size
   "Sorts a list of sections by their roster size."
@@ -314,7 +333,7 @@
               test-course-catalog (g/generate-course-catalog 3366 55)
               faculty (g/generate-faculty 1122 (vals test-course-catalog) faculty-per-cert)
               student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 1400)
-              schedule (schedule-all-required-classes (create-all-lunch-sections {}) faculty test-course-catalog student-body)]
+              schedule (schedule-all-required-classes (initialize-blank-schedule) faculty test-course-catalog student-body)]
           (io/delete-file "./resources/output.txt")
           (with-open [wrtr (io/writer "./resources/output.txt" :append true)]
             (.write wrtr (str "Current run time: " (str (java.time.LocalDateTime/now))))

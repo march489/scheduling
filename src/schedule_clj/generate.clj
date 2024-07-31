@@ -11,11 +11,11 @@
    Can be optionally called with a specific seed to generate
    the same course every time."
   ([]
-   (d/initialize-course (g/uuid) (g/rand-nth d/CERTS)))
+   (d/initialize-course (g/uuid) (g/rand-nth d/COURSE-CERTS)))
   ([seed]
    (let [r (java.util.Random. seed)]
      (binding [g/*rnd* r]
-       (d/initialize-course (g/uuid) (g/rand-nth d/CERTS))))))
+       (d/initialize-course (g/uuid) (g/rand-nth d/COURSE-CERTS))))))
 
 (defn generate-random-course-with-limits
   "Generates a course with a random uuid and random 
@@ -109,9 +109,6 @@
        generate-student-with-iep
        d/student-set-priority)))
 
-#_(filter #(or (seq (:inclusion %)) (seq (:separate-class %))) 
-          (vals (generate-heterogeneous-student-body 2233 (generate-course-catalog 3366 55) 1400)))
-
 (defn generate-student-list
   "Generates a full student body of random students with random selected required classes
    and electives from a course list"
@@ -136,18 +133,13 @@
           maps))
 
 (defn generate-faculty
-  ;; TODO: FIXME: Currently returns exactly 1 teacher per cert,
-  ;; need additional arg `num-teachers-per-cert`
-  ;; which can be toggled to make sure each cert is covered that many times
   "Generates a list of faculty based on a course list
    where each required certification shows up at leat 
    `num-teachers-per-cert` many times."
-  ([seed course-list]
-   (generate-faculty seed course-list 1))
-  ([seed course-list teachers-per-cert]
-   (make-super-map (let [needed-certs (->> course-list
-                                           (map :required-cert)
-                                           distinct
+  ([seed _course-list]
+   (generate-faculty seed _course-list 1))
+  ([seed _course-list teachers-per-cert]
+   (make-super-map (let [needed-certs (->> d/TEACHER-CERTS
                                            (map #(repeat teachers-per-cert %))
                                            flatten)
                          r (java.util.Random. seed)]

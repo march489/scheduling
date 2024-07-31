@@ -69,7 +69,7 @@
   (testing "Does `initialize-section` correctly initialize a section from a course"
     (let [r (java.util.Random. 3366)]
       (binding [g/*rnd* r]
-        (let [course (d/initialize-course (g/uuid) (g/rand-nth d/CERTS))
+        (let [course (d/initialize-course (g/uuid) (g/rand-nth d/COURSE-CERTS))
               period (g/rand-nth d/PERIODS)
               room (d/initialize-room "222" 28)
               section (d/initialize-section (g/uuid) course period room)]
