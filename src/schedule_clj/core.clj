@@ -251,7 +251,8 @@
           :else (first (gen/shuffle (seq student-free-periods))))))
 
 (defn schedule-single-student-class
-  "Registers a student to a section of a single course ID."
+  "Registers a student to a section of a single course ID.
+   Returns the updated schedule."
   [schedule faculty course-catalog course-id student]
   (let [existing-section-ids (all-available-course-sections schedule course-id)
         existing-periods (get-periods-from-section-ids schedule existing-section-ids)
@@ -270,12 +271,40 @@
             new-section-id (lookup-section updated-schedule course-id new-period)]
         (register-student-to-section updated-schedule student new-section-id)))))
 
+(defn student-missing-required-classes
+  "Returns a set of the student's required classes that the student
+   has not yet been scheduled for."
+  [schedule student]
+  (let [required-classes  (:requirements student)
+        scheduled-classes (map :course-id
+                               (-> schedule
+                                   (get-student-schedule (:student-id student))
+                                   vals))]
+    (s/difference (conj (set required-classes) :lunch) (set scheduled-classes))))
+
+(defn get-all-missing-classes
+  "Returns a map of student-id keys with vals consisting of the set of required classes
+   that they have not yet been schedulued for. "
+  [schedule student-body]
+  (reduce #(if-let [missing-classes (seq (student-missing-required-classes schedule %2))]
+             (assoc %1 (:student-id %2) (set missing-classes))
+             %1)
+          {}
+          (vals student-body)))
+
+
+;; (defn take-similar-students
+;;   "Takes `num-students` from the list of students who still have un-scheduled required classes,
+;;    sorted by priority and hamming distance from the key-student."
+;;   [schedule student-body num-students key-student-id]
+;;   (map #() (keys (get-all-missing-classes schedule (g/make-super-map student-body :student-id)))))
+
 (defn schedule-student-required-classes
   "Registers students to their required classes. If a section of a required class 
    doesn't already exist, this will create a new section in an open slot 
    in the student's schedule and assign the student to that class."
   [schedule faculty course-catalog student]
-  (let [required-classes (seq (:requirements student))]
+  (let [required-classes (seq (student-missing-required-classes schedule student))]
     (reduce #(schedule-single-student-class %1 faculty course-catalog %2 student)
             schedule
             required-classes)))
@@ -289,23 +318,6 @@
                                               %2)
           schedule
           (sort-by :priority > (vals student-body))))
-
-(defn get-student-missing-classes
-  [schedule student]
-  (let [required-classes  (:requirements student)
-        scheduled-classes (map :course-id
-                               (-> schedule
-                                   (get-student-schedule (:student-id student))
-                                   vals))]
-    (s/difference (conj (set required-classes) :lunch) (set scheduled-classes))))
-
-(defn get-all-missing-classes
-  [schedule student-body]
-  (reduce #(if-let [missing-classes (seq (get-student-missing-classes schedule %2))]
-             (assoc %1 (:student-id %2) (set missing-classes))
-             %1)
-          {}
-          (vals student-body)))
 
 (defn failure-summary!
   [schedule faculty student-body faculty-per-cert]

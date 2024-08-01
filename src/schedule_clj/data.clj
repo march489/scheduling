@@ -1,5 +1,8 @@
-(ns schedule-clj.data)
+(ns schedule-clj.data
+  (:require
+   [clojure.set :as s]))
 
+;; constants 
 (def COURSE-CERTS '(:english
                     :math
                     :social-science
@@ -14,15 +17,20 @@
                     :dance
                     :music
                     :performance))
+
 (def TEACHER-CERTS (concat COURSE-CERTS '(:sped :ell)))
+
 (def SCIENCE-CLASSES #{:chemistry
                        :physics
                        :biology})
+
 (def ART-CLASSES #{:visual
                    :dance
                    :music
                    :performance})
+
 (def LANGUAGE-CLASSES #{:mandarin :arabic})
+
 (def MATH-CLASSES #{:math})
 
 (def PERIODS '(:1st-per
@@ -38,6 +46,7 @@
                :C-per
                :D-per))
 
+;; logic about data structures
 (defn do-periods-overlap?
   [pd-1 pd-2]
   (or (= pd-1 pd-2)
@@ -177,6 +186,18 @@
       (assoc :priority 0)
       (update :priority + (count (:inclusion student)))
       (update :priority + (* 5 (count (:separate-class student))))))
+
+(defn student-hamming-distance
+  "This function measures a 'distance' between two students' schedules.
+   A student's distance from themselves should be 0, while two students
+   with no classes in common should have the maximum hamming distance."
+  [student-1 student-2]
+  (let [s1-classes (s/union (set (:requirements student-1))
+                            (set (:electives student-1)))
+        s2-classes (s/union (set (:requirements student-2))
+                            (set (:electives student-2)))
+        max-distance (min (count s1-classes) (count s2-classes))]
+    (- max-distance (count (s/intersection s1-classes s2-classes)))))
 
 (defn student-add-required-class
   [student new-class]
