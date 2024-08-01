@@ -141,15 +141,15 @@
                                    (map #(:requirements %))
                                    flatten
                                    (map #(:required-cert (% course-catalog)))
-                                   frequencies)]
-    (let [r (java.util.Random. seed)]
-      (-> (for [[cert enrollment] department-enrollment]
-            (map #(-> (binding [g/*rnd* r] (g/uuid))
-                      d/initialize-teacher
-                      (d/teacher-add-cert %))
-                 (repeat (+ 3 (quot enrollment 100)) cert)))
-          flatten
-          (make-super-map :teacher-id)))))
+                                   frequencies)
+        r (java.util.Random. seed)]
+    (-> (for [[cert enrollment] department-enrollment]
+          (map #(-> (binding [g/*rnd* r] (g/uuid))
+                    d/initialize-teacher
+                    (d/teacher-add-cert %))
+               (repeat (+ 3 (quot enrollment 100)) cert)))
+        flatten
+        (make-super-map :teacher-id))))
 
 (defn generate-rooms
   ([seed num-rooms]
