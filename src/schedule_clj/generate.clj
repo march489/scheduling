@@ -136,20 +136,20 @@
   "Generates a list of faculty based on a course list
    where each required certification shows up at leat 
    `num-teachers-per-cert` many times."
-  ([seed _course-list]
-   (generate-faculty seed _course-list 1))
-  ([seed _course-list teachers-per-cert]
-   (make-super-map (let [needed-certs (->> d/TEACHER-CERTS
-                                           (map #(repeat teachers-per-cert %))
-                                           flatten)
-                         r (java.util.Random. seed)]
-                     (map #(-> (binding [g/*rnd* r] (g/uuid)) d/initialize-teacher (d/teacher-add-cert %))
-                          needed-certs))
-                   :teacher-id)))
-
-(defn generate-section
-  [course period room]
-  (d/initialize-section (g/uuid) course period room))
+  [seed course-catalog students]
+  (let [department-enrollment (->> students
+                                   (map #(:requirements %))
+                                   flatten
+                                   (map #(:required-cert (% course-catalog)))
+                                   frequencies)]
+    (let [r (java.util.Random. seed)]
+      (-> (for [[cert enrollment] department-enrollment]
+            (map #(-> (binding [g/*rnd* r] (g/uuid))
+                      d/initialize-teacher
+                      (d/teacher-add-cert %))
+                 (repeat (+ 3 (quot enrollment 100)) cert)))
+          flatten
+          (make-super-map :teacher-id)))))
 
 (defn generate-rooms
   ([seed num-rooms]

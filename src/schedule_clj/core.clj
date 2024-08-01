@@ -9,6 +9,7 @@
 
 (def MAX-TEACHER-PREPS 2)
 (def DEFAULT-ROOM-CAPACITY 25)
+(def COHORT-SIZE 10)
 
 (defn all-available-course-sections
   "Returns a list of all sections in the schedule with the given course-id that have open space"
@@ -292,12 +293,19 @@
           {}
           (vals student-body)))
 
-
-;; (defn take-similar-students
-;;   "Takes `num-students` from the list of students who still have un-scheduled required classes,
-;;    sorted by priority and hamming distance from the key-student."
-;;   [schedule student-body num-students key-student-id]
-;;   (map #() (keys (get-all-missing-classes schedule (g/make-super-map student-body :student-id)))))
+#_(def st-body (g/generate-heterogeneous-student-body 2255
+                                                      (g/generate-course-catalog 3366 55)
+                                                      1400))
+#_(filter #(> (:priority %) 0) (map #(% st-body) (keys (get-all-missing-classes (initialize-blank-schedule) st-body))))
+#_(->> st-body
+       (get-all-missing-classes (initialize-blank-schedule))
+       keys
+       (filter #(not= :0a04457a-accc-a5c0-0e11-aeb6b568c0f5 %))
+       (map #(% st-body))
+       (filter #(> (:priority %) 0))
+       (sort-by :priority >)
+       (sort-by #(d/student-hamming-distance (:0a04457a-accc-a5c0-0e11-aeb6b568c0f5 st-body) %))
+       (take 3))
 
 (defn schedule-student-required-classes
   "Registers students to their required classes. If a section of a required class 
@@ -308,6 +316,30 @@
     (reduce #(schedule-single-student-class %1 faculty course-catalog %2 student)
             schedule
             required-classes)))
+
+;; ;; First attempt at creating a cohort of similar students
+(defn take-similar-students
+  "Takes `num-students` from the list of students who still have un-scheduled required classes,
+   sorted by priority and hamming distance from the key-student."
+  [schedule student-body num-students key-student-id]
+  (->> student-body
+       (get-all-missing-classes schedule)
+       keys
+       (filter #(not= key-student-id %))
+       (map #(% student-body))
+       (sort-by :priority >)
+       (sort-by #(d/student-hamming-distance (key-student-id student-body) %))
+       (take num-students)))
+
+;; ;; ;; FIRST PASS FOR COHORTING --> Failed
+;; (defn schedule-cohort-by-key-student
+;;   "Attempts to schedule a cohort of similar students based on a key student."
+;;   [schedule faculty course-catalog student-body key-student]
+;;   (let [updated-schedule (schedule-student-required-classes schedule faculty course-catalog key-student)]
+;;     (do (println (str "current st: " (:student-id key-student)))
+;;         (reduce #(schedule-student-required-classes %1 faculty course-catalog %2)
+;;                 updated-schedule
+;;                 (take-similar-students updated-schedule student-body COHORT-SIZE (:student-id key-student))))))
 
 (defn schedule-all-required-classes
   "Schedules all students in the student body to their required classes."
@@ -341,11 +373,11 @@
 (defn -main
   "launch!"
   []
-  (time (let [faculty-per-cert 10
-              test-course-catalog (g/generate-course-catalog 3366 55)
-              faculty (g/generate-faculty 1122 (vals test-course-catalog) faculty-per-cert)
-              student-body (g/generate-heterogeneous-student-body 2233 test-course-catalog 1400)
-              schedule (schedule-all-required-classes (initialize-blank-schedule) faculty test-course-catalog student-body)]
+  (time (let [faculty-per-cert :nothing
+              course-catalog (g/generate-course-catalog 3366 55)
+              student-body (g/generate-heterogeneous-student-body 2233 course-catalog 1400)
+              faculty (g/generate-faculty 1122 course-catalog (vals student-body))
+              schedule (schedule-all-required-classes (initialize-blank-schedule) faculty course-catalog student-body)]
           (io/delete-file "./resources/output.txt")
           (with-open [wrtr (io/writer "./resources/output.txt" :append true)]
             (.write wrtr (str "Current run time: " (str (java.time.LocalDateTime/now))))
