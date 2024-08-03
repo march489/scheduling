@@ -4,7 +4,8 @@
             [clojure.set :as s]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.data.generators :as gen])
+            [clojure.data.generators :as gen]
+            [clojure.stacktrace :as st])
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
@@ -12,7 +13,7 @@
 (def COHORT-SIZE 10)
 
 (defn all-available-course-sections
-  "Returns a list of all sections in the schedule with the given course-id that have open space"
+  "Returns a list of all section-ids in the schedule with the given course-id that have open space"
   [schedule course-id]
   (->> schedule
        vals
@@ -82,7 +83,7 @@
                                (map #(:period %)))]
     (apply find-non-overlapping-periods scheduled-periods)))
 
-(defn can-teacher-take-section?
+(defn can-gened-teacher-take-section?
   "Determines if a teacher can add a section of the given course to their schedule, by checking 
    
    1. Is the teacher currently below the max number of classes they can teach?, 
@@ -98,12 +99,29 @@
            count
            (<= MAX-TEACHER-PREPS))))
 
-(defn find-available-teacher
+(defn can-sped-teacher-take-section?
+  "Similar to `can-gened-teacher-take-section?` except it relaxes the requirement
+   that the sped teacher have the `:required-cert` and instead have the `:iep` cert. 
+   The max-preps requirement is also relaxed."
+  [schedule teacher period]
+  (and (< (count-teacher-sections schedule (:teacher-id teacher)) (:max-num-classes teacher))
+       (d/teacher-has-cert? teacher :sped)
+       (some #{period} (get-teacher-open-periods schedule (:teacher-id teacher)))))
+
+(defn find-available-gened-teacher
   "Finds a teacher among the faculty that can add a section of that course to their schedule"
   [schedule faculty course period]
   (->> faculty
        vals
-       (filter #(can-teacher-take-section? schedule % course period))
+       (filter #(can-gened-teacher-take-section? schedule % course period))
+       (sort-by #(count-teacher-sections schedule %) >)
+       first))
+
+(defn find-available-sped-teacher
+  [schedule faculty period]
+  (->> faculty
+       vals
+       (filter #(can-sped-teacher-take-section? schedule % period))
        (sort-by #(count-teacher-sections schedule %) >)
        first))
 
@@ -129,8 +147,6 @@
   [schedule student lunch-period]
   (if lunch-period
     (let [lunch-section-id (lookup-section schedule :lunch lunch-period)]
-      ;; (do (println (str "Lunch period: " lunch-period ", Lunch section id: " lunch-section-id))
-      ;;     (update schedule lunch-section-id d/section-register-student student))
       (update schedule lunch-section-id d/section-register-student student))
     schedule))
 
@@ -179,11 +195,12 @@
   "Updates the schedule to include a new section for a course if there's a teacher who can teach it."
   [schedule faculty course-catalog course-id period]
   (let [course (lookup-course course-catalog course-id)]
-    (if-let [teacher (find-available-teacher schedule faculty course period)]
+    (if-let [teacher (find-available-gened-teacher schedule faculty course period)]
       (let [section (d/initialize-section (random-uuid) course period (d/initialize-room "222" DEFAULT-ROOM-CAPACITY))]
         (-> schedule
             (assoc (:section-id section) section)
-            (assign-teacher-to-section teacher (:section-id section))))
+            ;; (assign-teacher-to-section teacher (:section-id section))
+            (update (:section-id section) d/section-assign-teacher teacher)))
       schedule)))
 
 (defn create-lunch-section
@@ -251,9 +268,10 @@
           (d/LANGUAGE-CLASSES cert) (last (sort (seq student-free-periods)))
           :else (first (gen/shuffle (seq student-free-periods))))))
 
-(defn schedule-single-student-class
-  "Registers a student to a section of a single course ID.
-   Returns the updated schedule."
+(defn schedule-single-student-class-gened
+  "Schedules a student to a general education class. 
+   Caller previous checked that this student does not have this `course-id`
+   referenced in `:inclusion` or `:separate-class`."
   [schedule faculty course-catalog course-id student]
   (let [existing-section-ids (all-available-course-sections schedule course-id)
         existing-periods (get-periods-from-section-ids schedule existing-section-ids)
@@ -272,6 +290,49 @@
             new-section-id (lookup-section updated-schedule course-id new-period)]
         (register-student-to-section updated-schedule student new-section-id)))))
 
+(defn assign-inclusion-teacher
+  [schedule faculty section-id]
+  (if-let [inclusion-teacher (find-available-sped-teacher schedule faculty (:period (section-id schedule)))]
+    ;; (assign-teacher-to-section schedule inclusion-teacher section-id)
+    (do (println "Found co-teacher!")
+        (update schedule section-id d/section-assign-teacher inclusion-teacher))
+    (do (println "No coteacher found! inclusion -> gened")
+        (update schedule section-id dissoc :inclusion))))
+
+(defn schedule-single-student-class-inclusion
+  "Schedules a student to an inclusion class. Needs to first check if 
+   there's an existing inclusion section for this `course-id`. If there isn't,
+   then it needs to check if there are gened classes that can turned into an
+   inclusion class."
+  [schedule faculty course-catalog course-id student]
+  (do (println (str "Inclusion section for student: " (:student-id student) "and course: " course-id))
+      (let [all-existing-section-ids (all-available-course-sections schedule course-id)
+            existing-inclusion-section-ids (filter #(:inclusion (% schedule)) all-existing-section-ids)
+            student-free-periods (->> student
+                                      :student-id
+                                      (get-student-open-periods schedule)
+                                      set)]
+        (if-let [valid-inclusion-period (select-class-period student-free-periods existing-inclusion-section-ids)]
+          (do (println "Found inclusion section!")
+              (register-student-to-section schedule student (lookup-section schedule course-id valid-inclusion-period)))
+          (let [updated-schedule (schedule-single-student-class-gened schedule faculty course-catalog course-id student)
+                student-schedule (get-student-schedule updated-schedule (:student-id student))]
+            (if-let [new-inclusion-section-coll (seq (filter #(= course-id (:course-id %)) (vals student-schedule)))]
+              (do (println (str "gened -> inclusion, section id: " (:section-id (first new-inclusion-section-coll))))
+                  (-> updated-schedule
+                      (update (:section-id (first new-inclusion-section-coll)) assoc :inclusion true)
+                      (assign-inclusion-teacher faculty (:section-id (first new-inclusion-section-coll)))))
+              (do (println "No suitable gened section found.")
+                  updated-schedule)))))))
+
+(defn schedule-single-student-class-dispatch
+  "Registers a student to a section of a single course ID.
+   Returns the updated schedule."
+  [schedule faculty course-catalog course-id student]
+  (cond
+    (contains? (:inclusion student) course-id) (schedule-single-student-class-inclusion schedule faculty course-catalog course-id student)
+    :else (schedule-single-student-class-gened schedule faculty course-catalog course-id student)))
+
 (defn student-missing-required-classes
   "Returns a set of the student's required classes that the student
    has not yet been scheduled for."
@@ -280,8 +341,11 @@
         scheduled-classes (map :course-id
                                (-> schedule
                                    (get-student-schedule (:student-id student))
-                                   vals))]
-    (s/difference (conj (set required-classes) :lunch) (set scheduled-classes))))
+                                   vals))
+        missing-classes (s/difference (conj (set required-classes) :lunch) (set scheduled-classes))
+        missing-inclusion-classes (s/intersection (:inclusion student) missing-classes)
+        other-classes (s/difference missing-classes missing-inclusion-classes)]
+    (concat (seq missing-inclusion-classes) (seq other-classes))))
 
 (defn get-all-missing-classes
   "Returns a map of student-id keys with vals consisting of the set of required classes
@@ -296,16 +360,6 @@
 #_(def st-body (g/generate-heterogeneous-student-body 2255
                                                       (g/generate-course-catalog 3366 55)
                                                       1400))
-#_(filter #(> (:priority %) 0) (map #(% st-body) (keys (get-all-missing-classes (initialize-blank-schedule) st-body))))
-#_(->> st-body
-       (get-all-missing-classes (initialize-blank-schedule))
-       keys
-       (filter #(not= :0a04457a-accc-a5c0-0e11-aeb6b568c0f5 %))
-       (map #(% st-body))
-       (filter #(> (:priority %) 0))
-       (sort-by :priority >)
-       (sort-by #(d/student-hamming-distance (:0a04457a-accc-a5c0-0e11-aeb6b568c0f5 st-body) %))
-       (take 3))
 
 (defn schedule-student-required-classes
   "Registers students to their required classes. If a section of a required class 
@@ -313,23 +367,23 @@
    in the student's schedule and assign the student to that class."
   [schedule faculty course-catalog student]
   (let [required-classes (seq (student-missing-required-classes schedule student))]
-    (reduce #(schedule-single-student-class %1 faculty course-catalog %2 student)
+    (reduce #(schedule-single-student-class-dispatch %1 faculty course-catalog %2 student)
             schedule
             required-classes)))
 
 ;; ;; First attempt at creating a cohort of similar students
-(defn take-similar-students
-  "Takes `num-students` from the list of students who still have un-scheduled required classes,
-   sorted by priority and hamming distance from the key-student."
-  [schedule student-body num-students key-student-id]
-  (->> student-body
-       (get-all-missing-classes schedule)
-       keys
-       (filter #(not= key-student-id %))
-       (map #(% student-body))
-       (sort-by :priority >)
-       (sort-by #(d/student-hamming-distance (key-student-id student-body) %))
-       (take num-students)))
+;; (defn take-similar-students
+;;   "Takes `num-students` from the list of students who still have un-scheduled required classes,
+;;    sorted by priority and hamming distance from the key-student."
+;;   [schedule student-body num-students key-student-id]
+;;   (->> student-body
+;;        (get-all-missing-classes schedule)
+;;        keys
+;;        (filter #(not= key-student-id %))
+;;        (map #(% student-body))
+;;        (sort-by :priority >)
+;;        (sort-by #(d/student-hamming-distance (key-student-id student-body) %))
+;;        (take num-students)))
 
 ;; ;; ;; FIRST PASS FOR COHORTING --> Failed
 ;; (defn schedule-cohort-by-key-student
@@ -373,29 +427,39 @@
 (defn -main
   "launch!"
   []
-  (time (let [faculty-per-cert :nothing
-              course-catalog (g/generate-course-catalog 3366 55)
-              student-body (g/generate-heterogeneous-student-body 2233 course-catalog 1400)
-              faculty (g/generate-faculty 1122 course-catalog (vals student-body))
-              schedule (schedule-all-required-classes (initialize-blank-schedule) faculty course-catalog student-body)]
-          (io/delete-file "./resources/output.txt")
-          (with-open [wrtr (io/writer "./resources/output.txt" :append true)]
-            (.write wrtr (str "Current run time: " (str (java.time.LocalDateTime/now))))
-            (.write wrtr (str \newline "Results:\n"))
+  (time (try (let [faculty-per-cert :nothing
+                   course-catalog (g/generate-course-catalog 3366 55)
+                   student-body (g/generate-heterogeneous-student-body 2233 course-catalog 1400)
+                   faculty (g/generate-faculty 1122 course-catalog (vals student-body))
+                   schedule (schedule-all-required-classes (initialize-blank-schedule) faculty course-catalog student-body)]
+               (io/delete-file "./resources/output.txt")
+               (with-open [wrtr (io/writer "./resources/output.txt" :append true)]
+                 (.write wrtr (str "Current run time: " (str (java.time.LocalDateTime/now))))
 
-            (doseq [section (sort-by :required-cert  (sort-by #(first (:teachers %)) (vals schedule)))]
-              (.write wrtr (str "Teacher ID: " (str/join "" (take-last 12 (str (first (:teachers section)))))
-                                ", Course ID: " (str/join "" (take-last 12 (str (:course-id section))))
-                                ", pd: " (:period section)
-                                ", subject: " (:required-cert section)
-                                ", enrollment: " (count (:roster section))
-                                ", max: " (:max-size section) \newline)))
-            (doseq [student-id (keys student-body)]
-              (.write wrtr (str "Student ID: " student-id "\n"))
-              (doseq [[section-id section] (get-student-schedule schedule student-id)]
-                (.write wrtr (str "Section ID: " section-id ", Course ID: " (:course-id section) ", Period: " (:period section) "\n")))
-              (.write wrtr "\n"))
-            (doseq [[student-id missing-classes] (get-all-missing-classes schedule student-body)]
-              (.write wrtr (str student-id ", " missing-classes "\n")))
-            (failure-summary! schedule faculty student-body faculty-per-cert)))))
+                 (.write wrtr (str \newline "Faculty:\n"))
+                 (doseq [teacher (sort-by (comp first :certs) (vals faculty))]
+                   (.write wrtr (str "teacher-id: " (:teacher-id teacher) " certs: " (:certs teacher) \newline)))
+
+                 (.write wrtr (str \newline))
+
+                 (.write wrtr (str \newline "Sections:\n"))
+                 (doseq [section (sort-by :required-cert  (sort-by #(first (:teachers %)) (vals schedule)))]
+                   (.write wrtr (str
+                                ;;  "Teacher IDs: " (str/join "" (take-last 12 (str (first (:teachers section)))))
+                                 "Teacher IDs: " (str/join ", " (map #(str/join "" (take-last 12 (str %))) (:teachers section)))
+                                 ", Course ID: " (str/join "" (take-last 12 (str (:course-id section))))
+                                 ", pd: " (:period section)
+                                 ", subject: " (:required-cert section)
+                                 ", enrollment: " (count (:roster section))
+                                 ", max: " (:max-size section) \newline)))
+                 (.write wrtr (str \newline))
+                 (doseq [student-id (keys student-body)]
+                   (.write wrtr (str "Student ID: " student-id "\n"))
+                   (doseq [[section-id section] (get-student-schedule schedule student-id)]
+                     (.write wrtr (str "Section ID: " section-id ", Course ID: " (:course-id section) ", Period: " (:period section) "\n")))
+                   (.write wrtr "\n"))
+                 (doseq [[student-id missing-classes] (get-all-missing-classes schedule student-body)]
+                   (.write wrtr (str student-id ", " missing-classes "\n")))
+                 (failure-summary! schedule faculty student-body faculty-per-cert)))
+             (catch Exception e (st/print-stack-trace e)))))
 

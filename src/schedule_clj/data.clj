@@ -145,7 +145,7 @@
   [id period]
   {:section-id (keyword (str id))
    :course-id :seminar
-   :required-cert :iep
+   :required-cert :sped
    :teachers #{}
    :period period
    :roster #{}
@@ -159,7 +159,7 @@
 (defn teacher-add-cert
   "Adds a certification to a teacher"
   [teacher new-cert]
-  (if-let [c (some #{new-cert} COURSE-CERTS)]
+  (if-let [c (some #{new-cert} TEACHER-CERTS)]
     (update teacher :certs conj c)
     teacher))
 

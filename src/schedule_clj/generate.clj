@@ -137,19 +137,27 @@
    where each required certification shows up at leat 
    `num-teachers-per-cert` many times."
   [seed course-catalog students]
-  (let [department-enrollment (->> students
-                                   (map #(:requirements %))
-                                   flatten
-                                   (map #(:required-cert (% course-catalog)))
-                                   frequencies)
+  (let [num-students-with-iep (->> students
+                                   (filter #(or (seq (:inclusion %))
+                                                (seq (:separate-class %))))
+                                   count)
+        department-enrollment (assoc (->> students
+                                          (map #(:requirements %))
+                                          flatten
+                                          (map #(:required-cert (% course-catalog)))
+                                          frequencies)
+                                     :sped
+                                     num-students-with-iep)
         r (java.util.Random. seed)]
-    (-> (for [[cert enrollment] department-enrollment]
-          (map #(-> (binding [g/*rnd* r] (g/uuid))
-                    d/initialize-teacher
-                    (d/teacher-add-cert %))
-               (repeat (+ 3 (quot enrollment 100)) cert)))
-        flatten
-        (make-super-map :teacher-id))))
+    (do (println (str "Num students with IEP: " num-students-with-iep))
+        (println department-enrollment)
+        (-> (for [[cert enrollment] department-enrollment]
+              (map #(-> (binding [g/*rnd* r] (g/uuid))
+                        d/initialize-teacher
+                        (d/teacher-add-cert %))
+                   (repeat (+ (if (= cert :sped) 8 3) (quot enrollment 100)) cert))) ;; #TODO Replace magic numbers
+            flatten
+            (make-super-map :teacher-id)))))
 
 (defn generate-rooms
   ([seed num-rooms]
