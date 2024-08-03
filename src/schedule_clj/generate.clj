@@ -172,13 +172,9 @@
                     (cond (< p prob-small-room) (assoc % :max-size 18)
                           (> p (- 1 prob-large-room)) (assoc % :max-size 60)
                           :else %))))))))
-#_(generate-rooms 2266 10 0.1 0.05)
-
 (defn generate-course-catalog
   [seed num-classes]
   (make-super-map (generate-random-course-list seed num-classes) :course-id))
-
-#_(generate-course-catalog 2266 20)
 
 (defn generate-homogeneous-student-body
   [seed course-catalog num-students]

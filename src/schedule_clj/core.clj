@@ -9,8 +9,7 @@
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
-(def DEFAULT-ROOM-CAPACITY 25)
-(def COHORT-SIZE 10)
+(def DEFAULT-ROOM-CAPACITY 27)
 
 (defn all-available-course-sections
   "Returns a list of all section-ids in the schedule with the given course-id that have open space"
@@ -133,63 +132,16 @@
                            (map #(:period %)))]
     (apply find-non-overlapping-periods scheduled-pds)))
 
-(defn student-has-lunch?
-  "Has the student been assigned to a lunch section?"
-  [schedule student-id]
-  (->> (get-student-schedule schedule student-id)
-       vals
-       (map :course-id)
-       (filter #(= :lunch %))
-       seq))
-
-(defn register-student-to-lunch-section
-  "Assign the student to a given lunch section."
-  [schedule student lunch-period]
-  (if lunch-period
-    (let [lunch-section-id (lookup-section schedule :lunch lunch-period)]
-      (update schedule lunch-section-id d/section-register-student student))
-    schedule))
-
-(defn lunch-section-available?
-  "Does the lunch schedule have space for an additional student?"
-  [schedule lunch-period]
-  (->> lunch-period
-       (lookup-section schedule :lunch)
-       schedule
-       d/section-has-space?))
-
-(defn verify-student-lunch
-  "Checks if a student has been assigned to a lunch section,
-   and if not, assigns them to an open lunch section."
-  [schedule student]
-  (if (student-has-lunch? schedule (:student-id student))
-    schedule
-    (->> student
-         :student-id
-         (get-student-open-periods schedule)
-         (filter d/is-half-block?)
-         (filter #(lunch-section-available? schedule %))
-         shuffle
-         first
-         (register-student-to-lunch-section schedule student))))
-
 (defn register-student-to-section
   "Updates the schedule to add a student to the roster for a section. If no such section exists,
    returns the existing schedule and fails to register the student."
   [schedule student section-id]
   (if section-id
     (if (section-id schedule)
-      (-> schedule
-          (update section-id d/section-register-student student)
-          (verify-student-lunch student))
+      (update schedule section-id d/section-register-student student)
       schedule)
     (do (Exception. (str "Null section id; missing course for sutdent " (:student-id student)))
         schedule)))
-
-(defn assign-teacher-to-section
-  "Updates the schedule to assign a teacher to teach a specfic section."
-  [schedule teacher section-id]
-  (update schedule section-id d/section-assign-teacher teacher))
 
 (defn create-new-section
   "Updates the schedule to include a new section for a course if there's a teacher who can teach it."
@@ -199,7 +151,6 @@
       (let [section (d/initialize-section (random-uuid) course period (d/initialize-room "222" DEFAULT-ROOM-CAPACITY))]
         (-> schedule
             (assoc (:section-id section) section)
-            ;; (assign-teacher-to-section teacher (:section-id section))
             (update (:section-id section) d/section-assign-teacher teacher)))
       schedule)))
 
@@ -291,13 +242,15 @@
         (register-student-to-section updated-schedule student new-section-id)))))
 
 (defn assign-inclusion-teacher
-  [schedule faculty section-id]
+  [schedule faculty student section-id]
   (if-let [inclusion-teacher (find-available-sped-teacher schedule faculty (:period (section-id schedule)))]
     ;; (assign-teacher-to-section schedule inclusion-teacher section-id)
     (do (println "Found co-teacher!")
         (update schedule section-id d/section-assign-teacher inclusion-teacher))
     (do (println "No coteacher found! inclusion -> gened")
-        (update schedule section-id dissoc :inclusion))))
+        (-> schedule 
+            (update section-id dissoc :inclusion)
+            (update-in [section-id :roster] disj (:student-id student))))))
 
 (defn schedule-single-student-class-inclusion
   "Schedules a student to an inclusion class. Needs to first check if 
@@ -305,7 +258,7 @@
    then it needs to check if there are gened classes that can turned into an
    inclusion class."
   [schedule faculty course-catalog course-id student]
-  (do (println (str "Inclusion section for student: " (:student-id student) "and course: " course-id))
+  (do (println (str "Inclusion section for student: " (:student-id student) " and course: " course-id))
       (let [all-existing-section-ids (all-available-course-sections schedule course-id)
             existing-inclusion-section-ids (filter #(:inclusion (% schedule)) all-existing-section-ids)
             student-free-periods (->> student
@@ -321,7 +274,7 @@
               (do (println (str "gened -> inclusion, section id: " (:section-id (first new-inclusion-section-coll))))
                   (-> updated-schedule
                       (update (:section-id (first new-inclusion-section-coll)) assoc :inclusion true)
-                      (assign-inclusion-teacher faculty (:section-id (first new-inclusion-section-coll)))))
+                      (assign-inclusion-teacher faculty student (:section-id (first new-inclusion-section-coll)))))
               (do (println "No suitable gened section found.")
                   updated-schedule)))))))
 
@@ -405,6 +358,17 @@
           schedule
           (sort-by :priority > (vals student-body))))
 
+
+(defn students-with-incorrect-lunches
+  [schedule student-body]
+  (let [get-lunch-count (fn [class-list] (count (filter #(= :lunch (:course-id %)) class-list)))
+        lunch-map (-> student-body
+                      (update-vals #(get-student-schedule schedule (:student-id %)))
+                      (update-vals #(get-lunch-count (vals %))))]
+    (into {} (for [[id lunches] lunch-map
+                   :when (not= lunches 1)]
+               [id lunches]))))
+
 (defn failure-summary!
   [schedule faculty student-body faculty-per-cert]
   (println)
@@ -460,6 +424,10 @@
                    (.write wrtr "\n"))
                  (doseq [[student-id missing-classes] (get-all-missing-classes schedule student-body)]
                    (.write wrtr (str student-id ", " missing-classes "\n")))
+
+                 (.write wrtr (str \newline "Students with more than one lunch:" \newline))
+                 (doseq [student (students-with-incorrect-lunches schedule student-body)]
+                   (.write wrtr (str "Student id: " student \newline)))
                  (failure-summary! schedule faculty student-body faculty-per-cert)))
              (catch Exception e (st/print-stack-trace e)))))
 
