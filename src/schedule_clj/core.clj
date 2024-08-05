@@ -9,7 +9,8 @@
   (:gen-class))
 
 (def MAX-TEACHER-PREPS 2)
-(def DEFAULT-ROOM-CAPACITY 27)
+(def SOFT-ROOM-CAPACITY 25)
+(def SEPARATE-CLASS-MAX-SIZE 7)
 
 (defn all-available-course-sections
   "Returns a list of all section-ids in the schedule with the given course-id that have open space"
@@ -22,16 +23,33 @@
        seq
        (map :section-id)))
 
+;; (defn lookup-section
+;;   "Returns the section ID in the schedule with the given id"
+;;   [schedule course-id period & opts]
+;;   (let [options (apply hash-map opts)
+;;         short-list (->> schedule
+;;                         vals
+;;                         (filter #(= course-id (:course-id %)))
+;;                         (filter #(= period (:period %)))
+;;                         (sort-by #(count (:roster %)))
+;;                         (map :section-id)
+;;                         first)]))
+
 (defn lookup-section
   "Returns the section ID in the schedule with the given id"
-  [schedule course-id period]
-  (->> schedule
-       vals
-       (filter #(= course-id (:course-id %)))
-       (filter #(= period (:period %)))
-       (sort-by #(count (:roster %)))
-       (map :section-id)
-       first))
+  [schedule course-id period & opts]
+  (let [options (apply hash-map opts)
+        short-list (->> schedule
+                        vals
+                        (filter #(= course-id (:course-id %)))
+                        (filter #(= period (:period %)))
+                        (sort-by #(count (:roster %))))]
+    (->> (cond
+           (:separate-class options) (filter #(:separate-class %) short-list)
+           (:inclusion options) (filter #(:inclusion %) short-list)
+           :else (filter #(not (:separate-class %)) short-list))
+         (map :section-id)
+         first)))
 
 (defn lookup-course
   "Returns the course map in the catalog with the given id"
@@ -148,7 +166,7 @@
   [schedule faculty course-catalog course-id period]
   (let [course (lookup-course course-catalog course-id)]
     (if-let [teacher (find-available-gened-teacher schedule faculty course period)]
-      (let [section (d/initialize-section (random-uuid) course period (d/initialize-room "222" DEFAULT-ROOM-CAPACITY))]
+      (let [section (d/initialize-section (random-uuid) course period (d/initialize-room "222" SOFT-ROOM-CAPACITY))]
         (-> schedule
             (assoc (:section-id section) section)
             (update (:section-id section) d/section-assign-teacher teacher)))
@@ -248,7 +266,7 @@
     (do (println "Found co-teacher!")
         (update schedule section-id d/section-assign-teacher inclusion-teacher))
     (do (println "No coteacher found! inclusion -> gened")
-        (-> schedule 
+        (-> schedule
             (update section-id dissoc :inclusion)
             (update-in [section-id :roster] disj (:student-id student))))))
 
@@ -258,31 +276,68 @@
    then it needs to check if there are gened classes that can turned into an
    inclusion class."
   [schedule faculty course-catalog course-id student]
-  (do (println (str "Inclusion section for student: " (:student-id student) " and course: " course-id))
-      (let [all-existing-section-ids (all-available-course-sections schedule course-id)
-            existing-inclusion-section-ids (filter #(:inclusion (% schedule)) all-existing-section-ids)
-            student-free-periods (->> student
-                                      :student-id
-                                      (get-student-open-periods schedule)
-                                      set)]
-        (if-let [valid-inclusion-period (select-class-period student-free-periods existing-inclusion-section-ids)]
-          (do (println "Found inclusion section!")
-              (register-student-to-section schedule student (lookup-section schedule course-id valid-inclusion-period)))
-          (let [updated-schedule (schedule-single-student-class-gened schedule faculty course-catalog course-id student)
-                student-schedule (get-student-schedule updated-schedule (:student-id student))]
-            (if-let [new-inclusion-section-coll (seq (filter #(= course-id (:course-id %)) (vals student-schedule)))]
-              (do (println (str "gened -> inclusion, section id: " (:section-id (first new-inclusion-section-coll))))
-                  (-> updated-schedule
-                      (update (:section-id (first new-inclusion-section-coll)) assoc :inclusion true)
-                      (assign-inclusion-teacher faculty student (:section-id (first new-inclusion-section-coll)))))
-              (do (println "No suitable gened section found.")
-                  updated-schedule)))))))
+  (let [all-existing-section-ids (all-available-course-sections schedule course-id)
+        existing-inclusion-section-ids (filter #(:inclusion (% schedule)) all-existing-section-ids)
+        student-free-periods (->> student
+                                  :student-id
+                                  (get-student-open-periods schedule)
+                                  set)]
+    (if-let [valid-inclusion-period (select-class-period student-free-periods existing-inclusion-section-ids)]
+      (do (println "Found inclusion section!")
+          (register-student-to-section schedule student (lookup-section schedule course-id valid-inclusion-period :inclusion true)))
+      (let [updated-schedule (schedule-single-student-class-gened schedule faculty course-catalog course-id student)
+            student-schedule (get-student-schedule updated-schedule (:student-id student))]
+        (if-let [new-inclusion-section-coll (seq (filter #(= course-id (:course-id %)) (vals student-schedule)))]
+          (do (println (str "gened -> inclusion, section id: " (:section-id (first new-inclusion-section-coll))))
+              (-> updated-schedule
+                  (update (:section-id (first new-inclusion-section-coll)) assoc :inclusion true)
+                  (assign-inclusion-teacher faculty student (:section-id (first new-inclusion-section-coll)))))
+          (do (println (str "No suitable gened section found, course-id: " course-id ", for student: " (:student-id student)))
+              updated-schedule))))))
+
+(defn create-new-separate-class-section
+  "Updates the schedule to include a new separate-class section for a course if there's a teacher who can teach it."
+  [schedule faculty course-catalog course-id period]
+  (let [modified-course (assoc (lookup-course course-catalog course-id) :required-cert :sped)]
+    (if-let [teacher (find-available-sped-teacher schedule faculty period)]
+      (do (println (str "SpEd teacher found for new separate class section for course: " course-id))
+          (let [section (d/initialize-section (random-uuid) modified-course period (d/initialize-room "222" SOFT-ROOM-CAPACITY))]
+            (-> schedule
+                (assoc (:section-id section) section)
+                (update (:section-id section) d/section-assign-teacher teacher)
+                (update (:section-id section) assoc :separate-class true)
+                (update (:section-id section) update :max-size #(min SEPARATE-CLASS-MAX-SIZE %)))))
+      (do (println (str "No SpEd teacher found to teach separate class for course: " course-id))
+          schedule))))
+
+(defn schedule-single-student-separate-class
+  [schedule faculty course-catalog course-id student]
+  (let [all-existing-section-ids (all-available-course-sections schedule course-id)
+        existing-separate-class-section-ids (filter #(:separate-class (% schedule)) all-existing-section-ids)
+        student-free-periods (->> student
+                                  :student-id
+                                  (get-student-open-periods schedule)
+                                  set)]
+    (if-let [valid-separate-class-period (select-class-period student-free-periods existing-separate-class-section-ids)]
+      (do (println "Found existing separate class section!")
+          (register-student-to-section schedule student (lookup-section schedule course-id valid-separate-class-period :separate-class true)))
+      (let [new-period (choose-new-period course-catalog course-id student-free-periods)
+            updated-schedule (create-new-separate-class-section schedule faculty course-catalog course-id new-period)]
+        (if-let [new-section-id (->> (all-available-course-sections updated-schedule course-id)
+                                     (filter #(:separate-class (% updated-schedule)))
+                                     (filter #(= new-period (:period (% updated-schedule))))
+                                     first)]
+          (do (println (str "New separate class section created: " new-section-id))
+              (register-student-to-section updated-schedule student new-section-id))
+          (do (println (str "Unable to create separate class section for course: " course-id))
+              updated-schedule))))))
 
 (defn schedule-single-student-class-dispatch
   "Registers a student to a section of a single course ID.
    Returns the updated schedule."
   [schedule faculty course-catalog course-id student]
   (cond
+    (contains? (:separate-class student) course-id) (schedule-single-student-separate-class schedule faculty course-catalog course-id student)
     (contains? (:inclusion student) course-id) (schedule-single-student-class-inclusion schedule faculty course-catalog course-id student)
     :else (schedule-single-student-class-gened schedule faculty course-catalog course-id student)))
 
@@ -418,9 +473,16 @@
                                  ", max: " (:max-size section) \newline)))
                  (.write wrtr (str \newline))
                  (doseq [student-id (keys student-body)]
-                   (.write wrtr (str "Student ID: " student-id "\n"))
+                   (.write wrtr (str "Student ID: " student-id "\nSchedule:\n"))
                    (doseq [[section-id section] (get-student-schedule schedule student-id)]
                      (.write wrtr (str "Section ID: " section-id ", Course ID: " (:course-id section) ", Period: " (:period section) "\n")))
+                   (.write wrtr "Required classes:\n")
+                   (let [student (student-id student-body)]
+                     (doseq [requirement (seq (:requirements student))]
+                       (.write wrtr (str "Course-id: " requirement " " (cond 
+                                                                         (contains? (:inclusion student) requirement) "inclusion\n" 
+                                                                         (contains? (:separate-class student) requirement) "separate class\n"
+                                                                         :else \newline)))))
                    (.write wrtr "\n"))
                  (doseq [[student-id missing-classes] (get-all-missing-classes schedule student-body)]
                    (.write wrtr (str student-id ", " missing-classes "\n")))

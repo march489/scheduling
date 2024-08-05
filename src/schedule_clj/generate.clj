@@ -4,6 +4,9 @@
 
 (def IEP-FREQ 0.03)
 (def SEPARATE-CLASS-FREQ 0.1)
+(def STUDENTS-PER-GENED-POSITION 100)
+(def STUDENTS-PER-SPED-POSITION 5)
+(def TEACHER-BUFFER 3)
 
 (defn generate-random-course
   "Generates a course with a random uuid and a random required cert,
@@ -155,7 +158,9 @@
               (map #(-> (binding [g/*rnd* r] (g/uuid))
                         d/initialize-teacher
                         (d/teacher-add-cert %))
-                   (repeat (+ (if (= cert :sped) 8 3) (quot enrollment 100)) cert))) ;; #TODO Replace magic numbers
+                   (repeat (+ TEACHER-BUFFER (if (= cert :sped)
+                                               (quot enrollment STUDENTS-PER-SPED-POSITION)
+                                               (quot enrollment STUDENTS-PER-GENED-POSITION))) cert))) ;; #TODO Replace magic numbers
             flatten
             (make-super-map :teacher-id)))))
 
