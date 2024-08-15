@@ -127,10 +127,10 @@
 (defn get-student-open-periods
   "Gets the currently open periods in the student's schedule."
   [schedule student-id]
-  (let [scheduled-pds (->> (get-student-schedule schedule student-id)
-                           vals
-                           (map #(:period %)))]
-    (apply find-non-overlapping-periods scheduled-pds)))
+  (->> (get-student-schedule schedule student-id)
+       vals
+       (map #(:period %))
+       (apply find-non-overlapping-periods)))
 
 (defn register-student-to-section
   "Updates the schedule to add a student to the roster for a section. If no such section exists,
@@ -248,7 +248,7 @@
     (do (println "Found co-teacher!")
         (update schedule section-id d/section-assign-teacher inclusion-teacher))
     (do (println "No coteacher found! inclusion -> gened")
-        (-> schedule 
+        (-> schedule
             (update section-id dissoc :inclusion)
             (update-in [section-id :roster] disj (:student-id student))))))
 
@@ -261,13 +261,20 @@
   (do (println (str "Inclusion section for student: " (:student-id student) " and course: " course-id))
       (let [all-existing-section-ids (all-available-course-sections schedule course-id)
             existing-inclusion-section-ids (filter #(:inclusion (% schedule)) all-existing-section-ids)
+            existing-inclusion-sections (map #(% schedule) existing-inclusion-section-ids)
             student-free-periods (->> student
                                       :student-id
                                       (get-student-open-periods schedule)
                                       set)]
-        (if-let [valid-inclusion-period (select-class-period student-free-periods existing-inclusion-section-ids)]
-          (do (println "Found inclusion section!")
-              (register-student-to-section schedule student (lookup-section schedule course-id valid-inclusion-period)))
+        (if-let [valid-inclusion-period (select-class-period student-free-periods
+                                                             (->> existing-inclusion-section-ids
+                                                                  (map #(% schedule))
+                                                                  (map :period)))]
+          (let [valid-section-id (->> existing-inclusion-sections
+                                      (filter #(= valid-inclusion-period (:period %)))
+                                      first)]
+            (do (println "Found inclusion section!")
+                (register-student-to-section schedule student valid-section-id)))
           (let [updated-schedule (schedule-single-student-class-gened schedule faculty course-catalog course-id student)
                 student-schedule (get-student-schedule updated-schedule (:student-id student))]
             (if-let [new-inclusion-section-coll (seq (filter #(= course-id (:course-id %)) (vals student-schedule)))]
@@ -323,30 +330,6 @@
     (reduce #(schedule-single-student-class-dispatch %1 faculty course-catalog %2 student)
             schedule
             required-classes)))
-
-;; ;; First attempt at creating a cohort of similar students
-;; (defn take-similar-students
-;;   "Takes `num-students` from the list of students who still have un-scheduled required classes,
-;;    sorted by priority and hamming distance from the key-student."
-;;   [schedule student-body num-students key-student-id]
-;;   (->> student-body
-;;        (get-all-missing-classes schedule)
-;;        keys
-;;        (filter #(not= key-student-id %))
-;;        (map #(% student-body))
-;;        (sort-by :priority >)
-;;        (sort-by #(d/student-hamming-distance (key-student-id student-body) %))
-;;        (take num-students)))
-
-;; ;; ;; FIRST PASS FOR COHORTING --> Failed
-;; (defn schedule-cohort-by-key-student
-;;   "Attempts to schedule a cohort of similar students based on a key student."
-;;   [schedule faculty course-catalog student-body key-student]
-;;   (let [updated-schedule (schedule-student-required-classes schedule faculty course-catalog key-student)]
-;;     (do (println (str "current st: " (:student-id key-student)))
-;;         (reduce #(schedule-student-required-classes %1 faculty course-catalog %2)
-;;                 updated-schedule
-;;                 (take-similar-students updated-schedule student-body COHORT-SIZE (:student-id key-student))))))
 
 (defn schedule-all-required-classes
   "Schedules all students in the student body to their required classes."
