@@ -12,7 +12,8 @@
 (def DEFAULT-ROOM-CAPACITY 27)
 
 (defn all-available-course-sections
-  "Returns a list of all section-ids in the schedule with the given course-id that have open space"
+  "Returns a list of all section-ids in the schedule with the given course-id 
+   that have open space"
   [schedule course-id]
   (->> schedule
        vals
