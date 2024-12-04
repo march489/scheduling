@@ -1,4 +1,4 @@
-(ns schedule-clj.core
+(ns schedule-clj.core 
   (:require [schedule-clj.generate :as g]
             [schedule-clj.data :as d]
             [clojure.set :as s]
@@ -8,8 +8,268 @@
             [clojure.stacktrace :as st])
   (:gen-class))
 
-(def MAX-TEACHER-PREPS 2)
-(def DEFAULT-ROOM-CAPACITY 27)
+
+
+;;;;;;;;;;;;;;;;;;;;;;
+;; Defining courses ;;
+;;;;;;;;;;;;;;;;;;;;;;
+
+(def ENDORSEMENTS
+  "The specific ISBE endorsements required to teach classes. 
+   This list is not comprehensive for the state of Illinois, 
+   but only serves to cover the requisite endorsements in my building.
+   The full list of endorsements can be found on the 
+   [ILTS page](https://www.il.nesinc.com/PageView.aspx?f=GEN_Tests.html)"
+  (list :english-language-arts
+        :math
+        :social-science-econ
+        :social-science-geography
+        :social-science-poli-sci
+        :social-science-psych
+        :social-science-history
+        :world-langauge-arabic
+        :world-language-mandarin
+        :science-chemistry
+        :science-physics
+        :science-biology
+        :cte
+        :rotc
+        :visual-arts
+        :dance
+        :music
+        :theater-drama
+        :phys-ed
+        :sped))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Classifying courses in the same discipline ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defmacro install-department-utility-functions
+  "Creates two utility functions given a `dept-name` and `included-endorsements`:
+   
+   - `<dept-name>-cert?`: Checks if a passed cert is one of the `included-endorsemensts`.
+
+   - `<dept-name>-class?: Checks if a passed course or section has a `:required-endorsement`
+   that is one of the `included-endorsements`.
+   
+   Example: `(install-department-utility-functions \"science\" :biology :physics)`
+
+   This creates two functions: `science-cert?` and `science-class?`.
+
+   - `(science-cert? :biology)` ; => :biology
+
+   - `(science-cert? :math)` ; => nil
+
+   - `(science-class? {:required-endorsement :biology})` ; => :biology
+
+   - `(science-class {:required-endorsement :art})` => nil
+   "
+  [dept-name & included-endorsements]
+  (let [cert? (symbol (str dept-name "-cert?"))
+        class? (symbol (str dept-name "-class?"))]
+    `(do
+      (defn ~cert?
+         ~(str "Is the `cert` in the " dept-name " department?")
+         [cert#]
+         (some #{cert#} (list ~@included-endorsements)))
+      (defn ~class?
+        ~(str "Is the class (e.g. `course` or `section`) 
+              in the " dept-name " department?")
+        [class#]
+        (~cert? (:required-endorsement class#))))
+    ))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Installing department utility functions ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(install-department-utility-functions "english" :english-language-arts)
+
+(install-department-utility-functions "math" :math)
+
+(install-department-utility-functions "social-science"
+                                      :social-science-econ
+                                      :social-science-geography
+                                      :social-science-poli-sci
+                                      :social-science-psych
+                                      :social-science-history)
+
+(install-department-utility-functions "world-language"
+                                      :world-langauge-arabic
+                                      :world-language-mandarin)
+
+(install-department-utility-functions "science"
+                                      :science-biology
+                                      :science-chemistry
+                                      :science-physics)
+
+(install-department-utility-functions "cte" :cte)
+
+(install-department-utility-functions "rotc" :rotc)
+
+(install-department-utility-functions "art"
+                                      :visual-arts
+                                      :dance
+                                      :music
+                                      :theater-drama)
+
+(install-department-utility-functions "phys-ed"
+                                      :phys-ed)
+
+(install-department-utility-functions "special-ed"
+                                      :lbs1)
+
+
+(defn required-space
+  "Returns the required classroom space for a specific course."
+  [course]
+  (cond (science-class? course) :lab-room
+        (art-class? course) :art-room
+        (phys-ed-class? course) :gym-room
+        (special-ed-class? course) :sped-room
+        :else :standard-room))
+
+;;;;;;;;;;;;;;;;;;;;;
+;; Defiing periods ;;
+;;;;;;;;;;;;;;;;;;;;;
+
+(def PERIODS (list :1st-per
+                   :2nd-per
+                   :3rd-per
+                   :4th-per
+                   :5th-per
+                   :6th-per
+                   :7th-per
+                   :8th-per
+                   :A-per
+                   :B-per
+                   :C-per
+                   :D-per))
+
+(defn overlapping-periods?
+  [pd-1 pd-2]
+  (or (= pd-1 pd-2)
+      (let [pds #{pd-1 pd-2}]
+        (or (= pds #{:2nd-per :A-per})
+            (= pds #{:2nd-per :B-per})
+            (= pds #{:6th-per :A-per})
+            (= pds #{:6th-per :B-per})
+            (= pds #{:3rd-per :C-per})
+            (= pds #{:3rd-per :D-per})
+            (= pds #{:7th-per :C-per})
+            (= pds #{:7th-per :D-per})))))
+
+(defn half-block?
+  [pd]
+  (some #{pd} '(:A-per :B-per :C-per :D-per)))
+
+(defn full-block?
+  [pd]
+  (and (some #{pd} PERIODS)
+       (not (half-block? pd))))
+
+(defn morning-period?
+  [pd]
+  (some #{pd} '(:1st-per :2nd-per :5th-per :6th-per :A-per :B-per)))
+
+(defn afternoon-period?
+  [pd]
+  (and (some #{pd} PERIODS)
+       (not (morning-period? pd))))
+
+;;;;;;;;;;;;;
+;; Faculty ;;
+;;;;;;;;;;;;;
+
+;; legal/constract constraints
+(def GENED-MAX-TEACHER-PREPS
+  "The contract number of distinct courses a general education teacher
+   can be assigned to teach."
+  2)
+
+(def GENED-MAX-TEACHER-NUM-SECTIONS
+  "The contract number of maximum sections that a general education teacher
+   can be assigned to teach."
+  5)
+
+(defn initialize-teacher
+  "Initializes a teacher with the minimum amount of data,
+   intended to be chained together with functions that add/remove data"
+  [id]
+  {:teacher-id (keyword (str id))
+   :max-num-classes GENED-MAX-TEACHER-NUM-SECTIONS 
+   :certs #{}})
+
+;;;;;;;;;;;;;;
+;; Students ;;
+;;;;;;;;;;;;;;
+
+(defn initialize-student
+  "Initializes a student with the minimum amount of data,
+   intended to be chained together with functions that modify its fields."
+  [id grade]
+  {:student-id (keyword (str id))
+   :grade grade
+   :requirements '()
+   :electives []
+   :inclusion #{}
+   :separate-class #{}})
+
+;;;;;;;;;;;
+;; Rooms ;;
+;;;;;;;;;;;
+
+(defn default-room-capacity
+  "Room capacity for different kinds of rooms in the building.
+   Throws an exception if the `room-type` is missing or invalid."
+  [room-type]
+  (condp = room-type
+    :lab-room 35
+    :sped-room 15
+    :gym-room 60
+    :art-room 30
+    :standard-room 28))
+
+(defn initialize-room
+  [room-number room-type] 
+  {:room-number room-number
+   :room-type room-type
+   :max-capacity (default-room-capacity room-type)})
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; Courses & Sections ;;
+;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def DEFAULT-MINIMUM-SECTION-SIZE
+  "The minimum number of students required for a section to be valid."
+  10)
+
+(defn initialize-course
+  "Initializes a course with its id (a UUID) and the endorsement
+   required to teach it." 
+  ([course-id required-endorsement]
+   {:course-id (keyword (str course-id))
+    :required-endorsement required-endorsement}))
+
+(defn initialize-section
+  "initializes a section, an instantiation of a course, which includes
+   specific teacher(s), time slot (period), and location (room).
+   Intended to be chained together with functions that modify its fields."
+  [section-id course period room & options]
+  (let [opts (apply hash-map options)]
+    {:section-id (keyword (str section-id))
+     :course-id (:course-id course)
+     :period period
+     :room-number (:room-number room)
+     :min-size DEFAULT-MINIMUM-SECTION-SIZE
+     :max-size ()}))
+
+
+
+
+
+
 
 (defn all-available-course-sections
   "Returns a list of all section-ids in the schedule with the given course-id 
@@ -22,6 +282,7 @@
        (sort-by #(count (:roster %)))
        seq
        (map :section-id)))
+
 
 (defn lookup-section
   "Returns the section ID in the schedule with the given id"
@@ -91,21 +352,21 @@
    3. Would adding the class mean the teacher has more than the max number of distinct preps?"
   [schedule teacher course period]
   (and (< (count-teacher-sections schedule (:teacher-id teacher)) (:max-num-classes teacher))
-       (d/teacher-has-cert? teacher (:required-cert course))
+       (d/teacher-has-cert? teacher (:required-endorsement course))
        (some #{period} (get-teacher-open-periods schedule (:teacher-id teacher)))
        (-> schedule
            (get-teacher-preps (:teacher-id teacher))
            (conj (:course-id course))
            count
-           (<= MAX-TEACHER-PREPS))))
+           (<= GENED-MAX-TEACHER-PREPS))))
 
 (defn can-sped-teacher-take-section?
   "Similar to `can-gened-teacher-take-section?` except it relaxes the requirement
-   that the sped teacher have the `:required-cert` and instead have the `:iep` cert. 
+   that the sped teacher have the `:required-endorsement` and instead have the `:iep` cert. 
    The max-preps requirement is also relaxed."
   [schedule teacher period]
   (and (< (count-teacher-sections schedule (:teacher-id teacher)) (:max-num-classes teacher))
-       (d/teacher-has-cert? teacher :sped)
+       (d/teacher-has-cert? teacher :lbs1)
        (some #{period} (get-teacher-open-periods schedule (:teacher-id teacher)))))
 
 (defn find-available-gened-teacher
@@ -213,11 +474,11 @@
   "Chooses a period for a new section ceing created in the schedule. Selectively chooses
    long or short blocks for certain departments."
   [course-catalog course-id student-free-periods]
-  (let [cert (:required-cert (course-id course-catalog))]
-    (cond (d/SCIENCE-CLASSES cert) (first (sort (seq student-free-periods)))
-          (d/ART-CLASSES cert) (first (sort (seq student-free-periods)))
-          (d/MATH-CLASSES cert) (last (sort (seq student-free-periods)))
-          (d/LANGUAGE-CLASSES cert) (last (sort (seq student-free-periods)))
+  (let [cert (:required-endorsement (course-id course-catalog))]
+    (cond (science-cert? cert) (first (sort (seq student-free-periods)))
+          (art-cert? cert) (first (sort (seq student-free-periods)))
+          (math-cert? cert) (last (sort (seq student-free-periods)))
+          (world-language-cert? cert) (last (sort (seq student-free-periods)))
           :else (first (gen/shuffle (seq student-free-periods))))))
 
 (defn schedule-single-student-class-gened
@@ -391,13 +652,13 @@
                  (.write wrtr (str \newline))
 
                  (.write wrtr (str \newline "Sections:\n"))
-                 (doseq [section (sort-by :required-cert  (sort-by #(first (:teachers %)) (vals schedule)))]
+                 (doseq [section (sort-by :required-endorsement  (sort-by #(first (:teachers %)) (vals schedule)))]
                    (.write wrtr (str
                                 ;;  "Teacher IDs: " (str/join "" (take-last 12 (str (first (:teachers section)))))
                                  "Teacher IDs: " (str/join ", " (map #(str/join "" (take-last 12 (str %))) (:teachers section)))
                                  ", Course ID: " (str/join "" (take-last 12 (str (:course-id section))))
                                  ", pd: " (:period section)
-                                 ", subject: " (:required-cert section)
+                                 ", subject: " (:required-endorsement section)
                                  ", enrollment: " (count (:roster section))
                                  ", max: " (:max-size section) \newline)))
                  (.write wrtr (str \newline))

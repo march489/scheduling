@@ -2,111 +2,117 @@
   (:require
    [clojure.set :as s]))
 
-;; constants 
-(def COURSE-CERTS '(:english
-                    :math
-                    :social-science
-                    :arabic
-                    :mandarin
-                    :chemistry
-                    :physics
-                    :biology
-                    :cte
-                    :rotc
-                    :visual
-                    :dance
-                    :music
-                    :performance))
+;; ;; constants 
+;; (def PERIODS (list :1st-per
+;;                    :2nd-per
+;;                    :3rd-per
+;;                    :4th-per
+;;                    :5th-per
+;;                    :6th-per
+;;                    :7th-per
+;;                    :8th-per
+;;                    :A-per
+;;                    :B-per
+;;                    :C-per
+;;                    :D-per))
 
-(def TEACHER-CERTS (concat COURSE-CERTS '(:sped :ell)))
+;; (def GENED-MAX-TEACHER-PREPS
+;;   "The contract number of distinct courses a general education teacher
+;;    can be assigned to teach."
+;;   2)
 
-(def SCIENCE-CLASSES #{:chemistry
-                       :physics
-                       :biology})
+;; (def DEFAULT-ROOM-CAPACITY
+;;   "The default room capacity for standard, unspecialized classrooms. 
+;;    Classroom spaces with more specialized uses (e.g. gym, library, lab) 
+;;    should have a more specific max capacity set."
+;;   27)
 
-(def ART-CLASSES #{:visual
-                   :dance
-                   :music
-                   :performance})
+;; ;; roughly equivalent to departments
+;; ;; but more specialized 
+;; (def COURSE-CERTS
+;;   "The specific ISBE endorsements required to teach classes. 
+;;    This list is not comprehensive for the state of Illinois, 
+;;    but only serves to cover the requisite endorsements in my building.
+;;    The full list of endorsements can be found on the 
+;;    [ILTS page](https://www.il.nesinc.com/PageView.aspx?f=GEN_Tests.html)"
+;;   (list :english-language-arts
+;;         :math
+;;         :social-science-econ
+;;         :social-science-geography
+;;         :social-science-poli-sci
+;;         :social-science-psych
+;;         :social-science-history
+;;         :world-langauge-arabic
+;;         :world-language-mandarin
+;;         :science-chemistry
+;;         :science-physics
+;;         :science-biology
+;;         :cte
+;;         :rotc
+;;         :visual-arts
+;;         :dance
+;;         :music
+;;         :theater-drama
+;;         :phys-ed))
 
-(def LANGUAGE-CLASSES #{:mandarin :arabic})
+;; (def ADDITIONAL-ENDORSEMENTS (list :lbs1 :ell))
 
-(def MATH-CLASSES #{:math})
+;; (def TEACHER-ENDORSEMENTS (concat COURSE-CERTS ADDITIONAL-ENDORSEMENTS))
 
-(def PERIODS '(:1st-per
-               :2nd-per
-               :3rd-per
-               :4th-per
-               :5th-per
-               :6th-per
-               :7th-per
-               :8th-per
-               :A-per
-               :B-per
-               :C-per
-               :D-per))
 
-;; logic about data structures
-(defn do-periods-overlap?
-  [pd-1 pd-2]
-  (or (= pd-1 pd-2)
-      (let [pds #{pd-1 pd-2}]
-        (or (= pds #{:2nd-per :A-per})
-            (= pds #{:2nd-per :B-per})
-            (= pds #{:6th-per :A-per})
-            (= pds #{:6th-per :B-per})
-            (= pds #{:3rd-per :C-per})
-            (= pds #{:3rd-per :D-per})
-            (= pds #{:7th-per :C-per})
-            (= pds #{:7th-per :D-per})))))
 
-(defn is-half-block?
-  [pd]
-  (some #{pd} '(:A-per :B-per :C-per :D-per)))
 
-(defn is-full-block?
-  [pd]
-  (and (some #{pd} PERIODS)
-       (not (is-half-block? pd))))
+;; ;; logic about data structures
+;; (defn do-periods-overlap?
+;;   [pd-1 pd-2]
+;;   (or (= pd-1 pd-2)
+;;       (let [pds #{pd-1 pd-2}]
+;;         (or (= pds #{:2nd-per :A-per})
+;;             (= pds #{:2nd-per :B-per})
+;;             (= pds #{:6th-per :A-per})
+;;             (= pds #{:6th-per :B-per})
+;;             (= pds #{:3rd-per :C-per})
+;;             (= pds #{:3rd-per :D-per})
+;;             (= pds #{:7th-per :C-per})
+;;             (= pds #{:7th-per :D-per})))))
 
-(defn overlaps-with-lunch-period?
-  [pd]
-  (->> PERIODS
-       (filter is-half-block?)
-       (map #(do-periods-overlap? pd %))
-       (some identity)))
+;; (defn is-half-block?
+;;   [pd]
+;;   (some #{pd} '(:A-per :B-per :C-per :D-per)))
 
-(defn initialize-teacher
-  "Initializes a teacher with the minimum amount of data,
-   intended to be chained together with functions that add/remove data"
-  [id]
-  {:teacher-id (keyword (str id))
-   :max-num-classes 5 ;; default value
-   :certs #{}})
+;; (defn is-full-block?
+;;   [pd]
+;;   (and (some #{pd} PERIODS)
+;;        (not (is-half-block? pd))))
 
-(defn initialize-student
-  "Initializes a student with the minimum amount of data,
-     intended to be chained together with functions that add/remove data"
-  [id grade]
-  {:student-id (keyword (str id))
-   :grade grade
-   :requirements '()
-   :electives []
-   :priority 0
-   :inclusion #{}
-   :separate-class #{}})
+;; (defn overlaps-with-lunch-period?
+;;   [pd]
+;;   (->> PERIODS
+;;        (filter is-half-block?)
+;;        (map #(do-periods-overlap? pd %))
+;;        (some identity)))
 
-(defn initialize-course
-  "Defines a course, including its upper and lower limits.
-   The `required-cert` is roughly equivalent to the department,
-   but can be more specific in the case of science and language"
-  ([course-id required-cert]
-   (initialize-course course-id required-cert 20 30))
-  ([course-id required-cert min-size max-size]
-   {:course-id (keyword (str course-id))
-    :required-cert required-cert
-    :min-size min-size
-    :max-size max-size}))
+;; (defn initialize-teacher
+;;   "Initializes a teacher with the minimum amount of data,
+;;    intended to be chained together with functions that add/remove data"
+;;   [id]
+;;   {:teacher-id (keyword (str id))
+;;    :max-num-classes 5 ;; default value
+;;    :certs #{}})
+
+;; (defn initialize-student
+;;   "Initializes a student with the minimum amount of data,
+;;      intended to be chained together with functions that add/remove data"
+;;   [id grade]
+;;   {:student-id (keyword (str id))
+;;    :grade grade
+;;    :requirements '()
+;;    :electives []
+;;    :priority 0
+;;    :inclusion #{}
+;;    :separate-class #{}})
+
+
 
 (defn initialize-room
   "Initializes a room with the minimum amount of data,
@@ -159,7 +165,7 @@
 (defn teacher-add-cert
   "Adds a certification to a teacher"
   [teacher new-cert]
-  (if-let [c (some #{new-cert} TEACHER-CERTS)]
+  (if-let [c (some #{new-cert} TEACHER-ENDORSEMENTS)]
     (update teacher :certs conj c)
     teacher))
 
