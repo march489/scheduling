@@ -39,6 +39,51 @@
          (coll? maps)]}
   (->> (map vector (map id-key maps) maps)
        (into {})))
+;;;;;;;;;;;
+;; Rooms ;;
+;;;;;;;;;;;
+
+(defn default-room-min-capacity
+  "Room min capacity for different kinds of rooms in the building.
+   Throws an exception if the `room-type` is missing or invalid."
+  [room-type]
+  (condp = room-type
+    :auditorium 20
+    :lab-room 10
+    :sped-room 1
+    :gym-room 20
+    :art-room 5
+    :standard-room 20
+    :cafeteria 1))
+
+(defn default-room-max-capacity
+  "Room max capacity for different kinds of rooms in the building.
+   Throws an exception if the `room-type` is missing or invalid."
+  [room-type]
+  (condp = room-type
+    :auditorium 500
+    :lab-room 35
+    :sped-room 15
+    :gym-room 60
+    :art-room 30
+    :standard-room 28
+    :cafeteria 360))
+
+(defn initialize-room
+  "Initializes a room in the building. Certain rooms like the `:cafeteria`
+   or `:auditorium` are special, and don't need a room number. Normal classroom spaces
+   need both a room number and a type."
+  ([room-type]
+   {:pre [(keyword? room-type)]}
+   (initialize-room (name room-type) room-type))
+  ([room-number room-type]
+   {:pre [(keyword? room-type)]
+    :post [(string? (:room-number %))]}
+   {:room-number  (if (keyword? room-number) (name room-number) (str room-number))
+    :room-type room-type
+    :min-capacity (default-room-min-capacity room-type)
+    :max-capacity (default-room-max-capacity room-type)}))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining courses ;;
@@ -126,8 +171,7 @@
          [cert#]
          (some #{cert#} (list ~@included-endorsements)))
        (defn ~class?
-         ~(str "Is the class (e.g. `course` or `section`) 
-              in the " dept-name " department?")
+         ~(str "Is the class (e.g. `course` or `section`) in the " dept-name " department?")
          [class#]
          (~cert? (:required-endorsement class#))))))
 
@@ -189,7 +233,13 @@
 
 (defn lunch?
   "Is the section a lunch section?"
-  [class] (= :lunch (:course-id class)))
+  [class]
+  (= :lunch (:course-id class)))
+
+(defn sped-seminar?
+  "Is the section a sped-seminar section?"
+  [class]
+  (= :sped-seminar (:course-id class)))
 
 
 (defn required-space
@@ -237,7 +287,7 @@
 
 (defn full-block?
   [pd]
-  (and (some #{pd} PERIODS)
+  (and (#{pd} PERIODS)
        (not (half-block? pd))))
 
 (defn morning-period?
@@ -246,7 +296,7 @@
 
 (defn afternoon-period?
   [pd]
-  (and (some #{pd} PERIODS)
+  (and (#{pd} PERIODS)
        (not (morning-period? pd))))
 
 ;;;;;;;;;;;;;
@@ -299,92 +349,26 @@
   [student]
   (contains? (:separate-class student) :sped-seminar))
 
+(defn student-iep-services-for-course
+  "Returns the level of IEP student services a `student` has for a particular `course`.
+   Returns either `:inclusion`, `:separate-class`, or `nil` if the student doesn't receive
+   services for that course."
+  [student course]
+  (cond (lunch? course) nil
+        (sped-seminar? course) :separate-class
+        :else (let [department (department (:required-endorsement course))]
+                (cond (contains? (:separate-class student) department) :separate-class
+                      (contains? (:inclusion student) department) :inclusion))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Registration ticket ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn initialize-registration-ticket
-  "Initializes registration ticket for a `student`. 
-   A ticket should include the `course-id`. All other flags are optional,
-   and have default values. `:track` refers to whether the class is `:regular-level`, 
-   `:honors-level`, `:ap-level`, or `:dual-enrollment`."
-  [student course & options]
-  (let [{elective :elective} (apply hash-map options)
-        {student-inclusion-classes :inclusion
-         student-separate-classes :separate-class} student
-        ticket {:course-id (as-keyword-id (:course-id course))
-                :required-endorsement (:required-endorsement course)
-                :student-id (:student-id student)}]
-    (as-> ticket t
-      (if elective (assoc t :elective elective) t)
-      (cond (lunch? course) t
-            (and student-inclusion-classes
-                 (student-inclusion-classes (department (:required-endorsement course)))) (assoc t :inclusion true)
-            (and student-separate-classes
-                 (student-separate-classes (department (:required-endorsement course)))) (assoc t :separate-class true)
-            :else t))))
+;; functions for analyzing the student body pointed map
 
-(defn add-single-ticket ;; #TODO determine if its worth keeping this function.
-  "Adds `registration-ticket` to student."
-  [student registration-ticket]
-  (update student :tickets (fnil conj []) registration-ticket))
-
-(defn add-lunch-ticket
-  "Add a registration ticket for lunch."
-  [student]
-  (let [lunch-ticket (initialize-registration-ticket student {:course-id :lunch})]
-    (update student :tickets (fnil conj []) lunch-ticket)))
-
-(defn add-registration-tickets
-  "Adds several tickets to a student."
-  [student tickets]
-  (reduce add-single-ticket student tickets))
-
-;;;;;;;;;;;
-;; Rooms ;;
-;;;;;;;;;;;
-
-(defn default-room-min-capacity
-  "Room min capacity for different kinds of rooms in the building.
-   Throws an exception if the `room-type` is missing or invalid."
-  [room-type]
-  (condp = room-type
-    :auditorium 20
-    :lab-room 10
-    :sped-room 1
-    :gym-room 20
-    :art-room 5
-    :standard-room 20
-    :cafeteria 1))
-
-(defn default-room-max-capacity
-  "Room max capacity for different kinds of rooms in the building.
-   Throws an exception if the `room-type` is missing or invalid."
-  [room-type]
-  (condp = room-type
-    :auditorium 500
-    :lab-room 35
-    :sped-room 15
-    :gym-room 60
-    :art-room 30
-    :standard-room 28
-    :cafeteria 360))
-
-(defn initialize-room
-  "Initializes a room in the building. Certain rooms like the `:cafeteria`
-   or `:auditorium` are special, and don't need a room number. Normal classroom spaces
-   need both a room number and a type."
-  ([room-type]
-   {:pre [(keyword? room-type)]}
-   (initialize-room (name room-type) room-type))
-  ([room-number room-type]
-   {:pre [(keyword? room-type)]
-    :post [(string? (:room-number %))]}
-   {:room-number  (if (keyword? room-number) (name room-number) (str room-number))
-    :room-type room-type
-    :min-capacity (default-room-min-capacity room-type)
-    :max-capacity (default-room-max-capacity room-type)}))
+(defn tickets
+  "Returns a flat list of tickets from all students in the `student-body`."
+  [student-body]
+  (->> student-body
+       vals
+       (mapcat :tickets)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Courses & Sections ;;
@@ -392,8 +376,9 @@
 
 ;; Initializing courses
 
+
 (def LUNCH-COURSE {:course-id :lunch})
-(def SEMINAR-COURSE {:course-id :sped-seminar :required-endorsement :lbs1})
+(def SPED-SEMINAR-COURSE {:course-id :sped-seminar :required-endorsement :lbs1})
 
 (defn initialize-course
   "Initializes a course with its id (a UUID) and the endorsement 
@@ -401,31 +386,6 @@
   [course-id required-endorsement]
   {:course-id (as-keyword-id course-id)
    :required-endorsement required-endorsement})
-
-;; (defmulti initialize-course
-;;   "Initializes a course with its id and the endorsement required."
-;;   (fn [course-id & required-endorsement] (into [course-id] required-endorsement)))
-
-;; (defmethod initialize-course [:lunch]
-;;   ^{:doc "Initializes a lunch course. There should only be one such course."}
-;;   initialize-lunch-course
-;;   [_course-id & _required-endorsement]
-;;   {:course-id :lunch})
-
-;; (defmethod initialize-course [:sped-seminar]
-;;   ^{:doc "Initializes a sped seminar course. There should only be one such course."}
-;;   initialize-sped-seminar-course
-;;   [_course-id & _required-endorsement]
-;;   {:course-id :sped-seminar
-;;    :required-endorsement :lbs1})
-
-;; (defmethod initialize-course :default
-;;   ^{:doc "Initializes a course with its id (a UUID) and the endorsement 
-;;           required to teach it."}
-;;   [course-id & required-endorsement]
-;;   {:pre [(= 1 (count required-endorsement))]}
-;;   {:course-id (as-keyword-id course-id)
-;;    :required-endorsement (first required-endorsement)})
 
 ;; Initializing sections
 (defmulti initialize-section
@@ -481,6 +441,57 @@
      :min-size (:min-capacity room)
      :max-size (:max-capacity room)  ;; #TODO update logic with sped requirements
      }))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Registration ticket ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn initialize-registration-ticket
+  "Initializes registration ticket for a `student`. 
+   A ticket should include the `course-id`. All other flags are optional,
+   and have default values. `:track` refers to whether the class is `:regular-level`, 
+   `:honors-level`, `:ap-level`, or `:dual-enrollment`."
+  [student course & options]
+  (let [services (student-iep-services-for-course student course)
+        {elective :elective} (apply hash-map options)
+        ticket {:course-id (as-keyword-id (:course-id course))
+                :required-endorsement (:required-endorsement course)
+                :student-id (:student-id student)}]
+    (cond-> ticket
+      elective (assoc :elective elective)
+      services (assoc services true))))
+
+(defn add-single-ticket ;; #TODO determine if its worth keeping this function.
+  "Adds `registration-ticket` to student."
+  [student registration-ticket]
+  (update student :tickets (fnil conj []) registration-ticket))
+
+(defn add-lunch-ticket
+  "Add a registration ticket for lunch."
+  [student]
+  (let [lunch-ticket (initialize-registration-ticket student LUNCH-COURSE)]
+    (update student :tickets (fnil conj []) lunch-ticket)))
+
+(defn add-seminar-ticket
+  "Adds a seminar registration ticket to a student's tickets if the student
+   has `:sped-seminar` separate class minutes."
+  [student]
+  (let [seminar-ticket (initialize-registration-ticket student SPED-SEMINAR-COURSE)]
+    (add-single-ticket student seminar-ticket)))
+
+(defn add-registration-tickets
+  "Adds several tickets to a student."
+  [student & ticket-options]
+  (let [{required-tickets :required-tickets
+         elective-tickets :elective-tickets} ticket-options]
+    (reduce add-single-ticket student (concat required-tickets
+                                              (map #(assoc % :elective true) elective-tickets))))
+  ;; (reduce add-single-ticket student tickets)
+  )
+
+
+
+
 
 
 

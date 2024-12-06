@@ -4,16 +4,17 @@
             [clojure.stacktrace :as st]))
 
 ;; marginal/total probability of a student having a probability
-(def IEP-PROBABILTY 0.20)
+(def IEP-PROBABILTY 0.08)
 
 ;; conditional probabilities -- given student already has an IEP
-(def GEOMETRIC-CLASSES-WITH-IEP-MINUTES 0.18)
+(def GEOMETRIC-CLASSES-WITH-IEP-MINUTES 0.6)
 (def MAX-CLASSES-WITH-IEP-MINUTES 4)
 (def RESOURCE-PROBABILITY 0.2)
-(def SEPARATE-CLASS-PROBABILITY 0.1)
+(def SEPARATE-CLASS-PROBABILITY 0.05)
 
 (def COURSE-SEED 6130)
 (def STUDENT-SEED 4140)
+(def TEACHER-SEED 8310)
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utility functions ;;
@@ -82,7 +83,7 @@
   "Generates a random registration ticket for a student given
    a list of potential courses, ruling out those for which the student
    is already ticketed."
-  [reqd-count course-catalog student & options] 
+  [reqd-count course-catalog student & options]
   (->> course-catalog
        seq ;; need to turn into seq in order to shuffle correctly
        g/shuffle
@@ -95,14 +96,15 @@
   [course-catalog]
   (let [new-student (merge (c/initialize-student (g/uuid) (g/uniform 7 13))
                            (when (< (g/float) IEP-PROBABILTY) (random-iep-minutes)))
-        required-classes (random-registration-tickets (+ DEFAULT-NUMBER-REQD-CLASSES
-                                                         DEFAULT-NUMBER-ELECTIVE-CLASSES)
-                                                      course-catalog
-                                                      new-student)]
-    (c/add-lunch-ticket
-     (reduce #(update-in %1 [:tickets %2] assoc :elective true)
-             (c/add-registration-tickets new-student required-classes)
-             (range DEFAULT-NUMBER-ELECTIVE-CLASSES)))))
+        tickets (random-registration-tickets (+ DEFAULT-NUMBER-REQD-CLASSES
+                                                DEFAULT-NUMBER-ELECTIVE-CLASSES)
+                                             course-catalog
+                                             new-student)
+        [elective-tickets required-tickets] (split-at DEFAULT-NUMBER-ELECTIVE-CLASSES tickets)]
+    (cond-> new-student
+      true (c/add-registration-tickets :elective-tickets elective-tickets :required-tickets required-tickets)
+      true c/add-lunch-ticket
+      (c/has-seminar? new-student) c/add-seminar-ticket)))
 
 (defn random-student-body
   "Generates a student body from a course catalog."
@@ -112,6 +114,16 @@
                                   #(binding [g/*rnd* r]
                                      (random-student course-catalog)))
                       :student-id)))
+
+
+(->> (random-student-body 1300 (random-course-catalog 55))
+     vals
+     (mapcat :tickets)
+     (filter :inclusion)
+     (map :required-endorsement)
+     (map c/department)
+     frequencies
+     )
 
 #_(= (random-student-body 1000 (random-course-catalog 55))
      (random-student-body 1000 (random-course-catalog 55)))
