@@ -4,7 +4,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.data.generators :as gen]
-            [clojure.stacktrace :as st])
+            [clojure.stacktrace :as st]
+            [clojure.test :as t])
   (:gen-class))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -22,7 +23,7 @@
                          (str/replace #"[^a-zA-Z\d\s-]" "")
                          (str/replace #"\s+" "-")
                          keyword)
-        :else (throw (IllegalArgumentException. (str id " is invalid format for an id")))))
+        :else (throw (IllegalArgumentException. (str (class id) " is invalid format for an id")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Making pointed maps ;;
@@ -42,6 +43,29 @@
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining courses ;;
 ;;;;;;;;;;;;;;;;;;;;;;
+
+(def DEPARTMENTS
+  "These are the departments that classroom teachers belong to. Every endorsed teacher
+   falls into one of these departments."
+  (list :english-language-arts
+        :math
+        :social-science
+        :world-langauge
+        :science
+        :cte
+        :rotc
+        :art
+        :phys-ed
+        :special-ed))
+
+(def CORE-SUBJECTS
+  "These are the core subject areas (departments). importantly, these are the subjects
+   in which students with IEPs can have instructional minutes."
+  (list :english-language-arts
+        :math
+        :science
+        :social-science
+        :world-langauge))
 
 (def ENDORSEMENTS
   "The specific ISBE endorsements required to teach classes. 
@@ -147,6 +171,22 @@
 (install-department-utility-functions "special-ed"
                                       :lbs1)
 
+(defn department
+  [endorsement]
+  {:pre [endorsement]}
+  (cond (english-cert? endorsement) :english-language-arts
+        (math-cert? endorsement) :math
+        (social-science-cert? endorsement) :social-science
+        (world-language-cert? endorsement) :world-language
+        (science-cert? endorsement) :science
+        (cte-cert? endorsement) :cte
+        (rotc-cert? endorsement) :rotc
+        (art-cert? endorsement) :art
+        (phys-ed-cert? endorsement) :phys-ed
+        (special-ed-cert? endorsement) :special-ed
+        :else ((println (nil? endorsement))
+               (throw (IllegalArgumentException. (str endorsement " is not a valid endorsement."))))))
+
 (defn lunch?
   "Is the section a lunch section?"
   [class] (= :lunch (:course-id class)))
@@ -241,26 +281,65 @@
 (defn initialize-student
   "Initializes a student with the minimum amount of data,
    intended to be chained together with functions that modify its fields."
-  [id grade]
-  {:student-id (as-keyword-id id)
-   :grade grade})
+  [id grade & options]
+  (let [{:keys [inclusion separate-class]} options]
+    (as-> {:student-id (as-keyword-id id) :grade (str grade)} st
+      (if inclusion (assoc st :inclusion (set inclusion)) st)
+      (if separate-class (assoc st :separate-class (set separate-class)) st))))
+
+(defn has-iep?
+  "Does the student have an IEP?"
+  [student]
+  (or (:inclusion student)
+      (:separate-class student)))
+
+(defn has-seminar?
+  "Does the student have seminar minutes? This information is stored 
+   in `:separate-class #{:sped-seminar}."
+  [student]
+  (contains? (:separate-class student) :sped-seminar))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Registration ticket ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn initialize-registration-ticket
-  "Initializes registration ticket for a `student`"
-  [student course-id & options]
-  (let [{:keys [environment] :or {environment :gen-ed}} (apply hash-map options)]
-    {:course-id (as-keyword-id course-id)
-     :student-id (:student-id student)
-     :environment environment}))
+  "Initializes registration ticket for a `student`. 
+   A ticket should include the `course-id`. All other flags are optional,
+   and have default values. `:track` refers to whether the class is `:regular-level`, 
+   `:honors-level`, `:ap-level`, or `:dual-enrollment`."
+  [student course & options]
+  (let [{elective :elective} (apply hash-map options)
+        {student-inclusion-classes :inclusion
+         student-separate-classes :separate-class} student
+        ticket {:course-id (as-keyword-id (:course-id course))
+                :required-endorsement (:required-endorsement course)
+                :student-id (:student-id student)}]
+    (as-> ticket t
+      (if elective (assoc t :elective elective) t)
+      (cond (lunch? course) t
+            (and student-inclusion-classes
+                 (student-inclusion-classes (department (:required-endorsement course)))) (assoc t :inclusion true)
+            (and student-separate-classes
+                 (student-separate-classes (department (:required-endorsement course)))) (assoc t :separate-class true)
+            :else t))))
 
-(defn add-registration-ticket ;; #TODO determine if its worth keeping this function.
+(defn add-single-ticket ;; #TODO determine if its worth keeping this function.
   "Adds `registration-ticket` to student."
   [student registration-ticket]
-  (update student :tickets conj registration-ticket))
+  (update student :tickets (fnil conj []) registration-ticket))
+
+(defn add-lunch-ticket
+  "Add a registration ticket for lunch."
+  [student]
+  (let [lunch-ticket (initialize-registration-ticket student {:course-id :lunch})]
+    (update student :tickets (fnil conj []) lunch-ticket)))
+
+(defn add-registration-tickets
+  "Adds several tickets to a student."
+  [student tickets]
+  (reduce add-single-ticket student tickets))
 
 ;;;;;;;;;;;
 ;; Rooms ;;
@@ -297,9 +376,12 @@
    or `:auditorium` are special, and don't need a room number. Normal classroom spaces
    need both a room number and a type."
   ([room-type]
-   (initialize-room room-type room-type))
+   {:pre [(keyword? room-type)]}
+   (initialize-room (name room-type) room-type))
   ([room-number room-type]
-   {:room-number (if (keyword? room-number) room-number (str room-number))
+   {:pre [(keyword? room-type)]
+    :post [(string? (:room-number %))]}
+   {:room-number  (if (keyword? room-number) (name room-number) (str room-number))
     :room-type room-type
     :min-capacity (default-room-min-capacity room-type)
     :max-capacity (default-room-max-capacity room-type)}))
@@ -308,33 +390,42 @@
 ;; Courses & Sections ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(def DEFAULT-MINIMUM-SECTION-SIZE
-  "The minimum number of students required for a section to be valid."
-  10)
-
 ;; Initializing courses
-(defmulti initialize-course
-  "Initializes a course with its id and the endorsement required."
-  (fn [course-id & required-endorsement] (into [course-id] required-endorsement)))
 
-(defmethod initialize-course [:lunch]
-  initialize-lunch-course
-  [_course-id & _required-endorsement]
-  {:course-id :lunch})
+(def LUNCH-COURSE {:course-id :lunch})
+(def SEMINAR-COURSE {:course-id :sped-seminar :required-endorsement :lbs1})
 
-(defmethod initialize-course [:sped-seminar]
-  initialize-sped-seminar-course
-  [_course-id & _required-endorsement]
-  {:course-id :sped-seminar
-   :required-endorsement :lbs1})
-
-(defmethod initialize-course :default
-  ^{:doc "Initializes a course with its id (a UUID) and the endorsement 
-          required to teach it."}
-  [course-id & required-endorsement]
-  {:pre [(= 1 (count required-endorsement))]}
+(defn initialize-course
+  "Initializes a course with its id (a UUID) and the endorsement 
+   required to teach it."
+  [course-id required-endorsement]
   {:course-id (as-keyword-id course-id)
-   :required-endorsement (first required-endorsement)})
+   :required-endorsement required-endorsement})
+
+;; (defmulti initialize-course
+;;   "Initializes a course with its id and the endorsement required."
+;;   (fn [course-id & required-endorsement] (into [course-id] required-endorsement)))
+
+;; (defmethod initialize-course [:lunch]
+;;   ^{:doc "Initializes a lunch course. There should only be one such course."}
+;;   initialize-lunch-course
+;;   [_course-id & _required-endorsement]
+;;   {:course-id :lunch})
+
+;; (defmethod initialize-course [:sped-seminar]
+;;   ^{:doc "Initializes a sped seminar course. There should only be one such course."}
+;;   initialize-sped-seminar-course
+;;   [_course-id & _required-endorsement]
+;;   {:course-id :sped-seminar
+;;    :required-endorsement :lbs1})
+
+;; (defmethod initialize-course :default
+;;   ^{:doc "Initializes a course with its id (a UUID) and the endorsement 
+;;           required to teach it."}
+;;   [course-id & required-endorsement]
+;;   {:pre [(= 1 (count required-endorsement))]}
+;;   {:course-id (as-keyword-id course-id)
+;;    :required-endorsement (first required-endorsement)})
 
 ;; Initializing sections
 (defmulti initialize-section

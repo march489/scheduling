@@ -36,7 +36,7 @@
 (deftest generate-random-student-test
   (testing "Do we consistently generate the same student?"
     (let [course-list (g/generate-random-course-list 3366 10)
-          student (g/generate-random-student 2266 course-list)]
+          student (g/random-student 2266 course-list)]
       (is (= student
              {:student-id :ebca8c0d-f1f0-754e-77a2-c6bcaf03468a,
               :grade "9",
