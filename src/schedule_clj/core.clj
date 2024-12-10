@@ -21,7 +21,7 @@
         (string? id) (-> id
                          (str/replace #"[^a-zA-Z\d\s-]" "")
                          (str/replace #"\s+" "-")
-                         keyword )
+                         keyword)
         :else (throw (IllegalArgumentException. (str (class id) " is invalid format for an id")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -210,7 +210,7 @@
 
 (install-department-utility-functions "phys-ed"
                                       ::phys-ed)
- 
+
 (install-department-utility-functions "special-ed"
                                       ::lbs1)
 
@@ -244,7 +244,8 @@
 (defn required-space
   "Returns the required classroom space for a specific course."
   [course]
-  (cond (science-class? course) ::lab-room
+  (cond (lunch? course) ::cafeteria
+        (science-class? course) ::lab-room
         (art-class? course) ::art-room
         (phys-ed-class? course) ::gym-room
         (special-ed-class? course) ::sped-room
@@ -282,20 +283,21 @@
 
 (defn half-block?
   [pd]
-  (#{pd} '(::A-per ::B-per ::C-per ::D-per)))
+  (some #{pd} (list ::A-per ::B-per ::C-per ::D-per)))
+
 
 (defn full-block?
   [pd]
-  (and (#{pd} PERIODS)
+  (and (some #{pd} PERIODS)
        (not (half-block? pd))))
 
 (defn morning-period?
   [pd]
-  (some #{pd} '(::1st-per ::2nd-per ::5th-per ::6th-per ::A-per ::B-per)))
+  (some #{pd} (list ::1st-per ::2nd-per ::5th-per ::6th-per ::A-per ::B-per)))
 
 (defn afternoon-period?
   [pd]
-  (and (#{pd} PERIODS)
+  (and (some #{pd} PERIODS)
        (not (morning-period? pd))))
 
 ;;;;;;;;;;;;;
@@ -484,9 +486,7 @@
   (let [{required-tickets ::required-tickets
          elective-tickets ::elective-tickets} ticket-options]
     (reduce add-single-ticket student (concat required-tickets
-                                              (map #(assoc % ::elective true) elective-tickets))))
-  ;; (reduce add-single-ticket student tickets)
-  )
+                                              (map #(assoc % ::elective true) elective-tickets)))))
 
 
 

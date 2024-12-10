@@ -1,7 +1,6 @@
 (ns schedule-clj.generate
   (:require [schedule-clj.core :as c]
-            [clojure.data.generators :as g]
-            [clojure.stacktrace :as st]))
+            [clojure.data.generators :as g]))
 
 ;; marginal/total probability of a student having a probability
 (def IEP-PROBABILTY 0.08)
@@ -33,8 +32,8 @@
         (map vector
              c/ENDORSEMENTS
              (let [r (java.util.Random. ENDORSEMENT-SEED)]
-               (for [_ c/ENDORSEMENTS] 
-                 (binding [g/*rnd* r] (g/uniform 0 1000)))))))
+               (for [_ c/ENDORSEMENTS]
+                 (binding [g/*rnd* r] (g/geometric 0.1)))))))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; Random courses ;;
@@ -118,12 +117,8 @@
                       ::c/student-id)))
 
 #_(->> (random-student-body 1300 (random-course-catalog 55))
-     vals
-     (mapcat ::c/tickets)
-     (filter ::c/inclusion)
-     (map ::c/required-endorsement)
-     (map c/department)
-     frequencies)
+       vals
+       (mapcat ::c/tickets))
 
 #_(= (random-student-body 1000 (random-course-catalog 55))
      (random-student-body 1000 (random-course-catalog 55)))
