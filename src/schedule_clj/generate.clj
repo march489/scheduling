@@ -14,7 +14,7 @@
 
 (def COURSE-SEED 6130)
 (def STUDENT-SEED 4140)
-(def TEACHER-SEED 8310)
+(def ENDORSEMENT-SEED 8310)
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utility functions ;;
@@ -32,7 +32,9 @@
   (into {}
         (map vector
              c/ENDORSEMENTS
-             (for [_ c/ENDORSEMENTS] (g/uniform 0 1000)))))
+             (let [r (java.util.Random. ENDORSEMENT-SEED)]
+               (for [_ c/ENDORSEMENTS] 
+                 (binding [g/*rnd* r] (g/uniform 0 1000)))))))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; Random courses ;;
@@ -53,7 +55,7 @@
         (repeatedly num-courses
                     #(binding [g/*rnd* r]
                        (random-course))))
-      (c/as-pointed-map :course-id)))
+      (c/as-pointed-map ::c/course-id)))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; Random student ;;
@@ -73,9 +75,9 @@
     (update-vals
      (reduce (fn [m _]
                (if (< (g/float) SEPARATE-CLASS-PROBABILITY)
-                 (update m :separate-class conj (g/rand-nth c/CORE-SUBJECTS))
-                 (update m :inclusion conj (g/rand-nth c/CORE-SUBJECTS))))
-             (if (< (g/float) RESOURCE-PROBABILITY) {:separate-class #{:sped-seminar}} {})
+                 (update m ::c/separate-class conj (g/rand-nth c/CORE-SUBJECTS))
+                 (update m ::c/inclusion conj (g/rand-nth c/CORE-SUBJECTS))))
+             (if (< (g/float) RESOURCE-PROBABILITY) {::c/eparate-class #{::c/sped-seminar}} {})
              (range classes-with-minutes))
      set)))
 
@@ -102,7 +104,7 @@
                                              new-student)
         [elective-tickets required-tickets] (split-at DEFAULT-NUMBER-ELECTIVE-CLASSES tickets)]
     (cond-> new-student
-      true (c/add-registration-tickets :elective-tickets elective-tickets :required-tickets required-tickets)
+      true (c/add-registration-tickets ::c/elective-tickets elective-tickets ::c/required-tickets required-tickets)
       true c/add-lunch-ticket
       (c/has-seminar? new-student) c/add-seminar-ticket)))
 
@@ -113,20 +115,20 @@
     (c/as-pointed-map (repeatedly num-students
                                   #(binding [g/*rnd* r]
                                      (random-student course-catalog)))
-                      :student-id)))
+                      ::c/student-id)))
 
-
-(->> (random-student-body 1300 (random-course-catalog 55))
+#_(->> (random-student-body 1300 (random-course-catalog 55))
      vals
-     (mapcat :tickets)
-     (filter :inclusion)
-     (map :required-endorsement)
+     (mapcat ::c/tickets)
+     (filter ::c/inclusion)
+     (map ::c/required-endorsement)
      (map c/department)
-     frequencies
-     )
+     frequencies)
 
 #_(= (random-student-body 1000 (random-course-catalog 55))
      (random-student-body 1000 (random-course-catalog 55)))
+
+
 ;; (defn generate-student-cohort-list
 ;;   "Generates a cohort of students with unique student-ids but otherwise identical in terms of
 ;;    grade level, required classes, and electives."
@@ -135,43 +137,43 @@
 ;;         r (java.util.Random. seed)]
 ;;     (map #(assoc student :student-id (keyword (str %))) (repeatedly num-students #(binding [g/*rnd* r] (g/uuid))))))
 
-;; (defn generate-faculty
-;;   "Generates a list of faculty based on a course list
-;;    where each required certification shows up at leat 
-;;    `num-teachers-per-cert` many times."
-;;   [seed course-catalog students]
-;;   (let [num-students-with-iep (->> students
-;;                                    (filter #(or (seq (:inclusion %))
-;;                                                 (seq (:separate-class %))))
-;;                                    count)
-;;         department-enrollment (assoc (->> students
-;;                                           (map #(:requirements %))
-;;                                           flatten
-;;                                           (map #(:required-cert (% course-catalog)))
-;;                                           frequencies)
-;;                                      :sped
-;;                                      num-students-with-iep)
-;;         r (java.util.Random. seed)]
-;;     (do (println (str "Num students with IEP: " num-students-with-iep))
-;;         (println department-enrollment)
-;;         (-> (for [[cert enrollment] department-enrollment]
-;;               (map #(-> (binding [g/*rnd* r] (g/uuid))
-;;                         c/initialize-teacher
-;;                         (c/teacher-add-cert %))
-;;                    (repeat (+ (if (= cert :sped) 8 3) (quot enrollment 100)) cert))) ;; #TODO Replace magic numbers
-;;             flatten
-;;             (make-super-map :teacher-id)))))
+;; ;; (defn generate-faculty
+;; ;;   "Generates a list of faculty based on a course list
+;; ;;    where each required certification shows up at leat 
+;; ;;    `num-teachers-per-cert` many times."
+;; ;;   [seed course-catalog students]
+;; ;;   (let [num-students-with-iep (->> students
+;; ;;                                    (filter #(or (seq (:inclusion %))
+;; ;;                                                 (seq (:separate-class %))))
+;; ;;                                    count)
+;; ;;         department-enrollment (assoc (->> students
+;; ;;                                           (map #(:requirements %))
+;; ;;                                           flatten
+;; ;;                                           (map #(:required-cert (% course-catalog)))
+;; ;;                                           frequencies)
+;; ;;                                      :sped
+;; ;;                                      num-students-with-iep)
+;; ;;         r (java.util.Random. seed)]
+;; ;;     (do (println (str "Num students with IEP: " num-students-with-iep))
+;; ;;         (println department-enrollment)
+;; ;;         (-> (for [[cert enrollment] department-enrollment]
+;; ;;               (map #(-> (binding [g/*rnd* r] (g/uuid))
+;; ;;                         c/initialize-teacher
+;; ;;                         (c/teacher-add-cert %))
+;; ;;                    (repeat (+ (if (= cert :sped) 8 3) (quot enrollment 100)) cert))) ;; #TODO Replace magic numbers
+;; ;;             flatten
+;; ;;             (make-super-map :teacher-id)))))
 
-;; (defn generate-rooms
-;;   ([seed num-rooms]
-;;    (generate-rooms seed num-rooms 0 0))
-;;   ([seed num-rooms prob-small-room prob-large-room]
-;;    (let [r (java.util.Random. seed)
-;;          room-numbers (map #(str (+ 100 %)) (range num-rooms))]
-;;      (->> room-numbers
-;;           (map #(c/initialize-room % 30))
-;;           (map #(binding [g/*rnd* r]
-;;                   (let [p (g/float)]
-;;                     (cond (< p prob-small-room) (assoc % :max-size 18)
-;;                           (> p (- 1 prob-large-room)) (assoc % :max-size 60)
-;;                           :else %))))))))
+;; ;; (defn generate-rooms
+;; ;;   ([seed num-rooms]
+;; ;;    (generate-rooms seed num-rooms 0 0))
+;; ;;   ([seed num-rooms prob-small-room prob-large-room]
+;; ;;    (let [r (java.util.Random. seed)
+;; ;;          room-numbers (map #(str (+ 100 %)) (range num-rooms))]
+;; ;;      (->> room-numbers
+;; ;;           (map #(c/initialize-room % 30))
+;; ;;           (map #(binding [g/*rnd* r]
+;; ;;                   (let [p (g/float)]
+;; ;;                     (cond (< p prob-small-room) (assoc % :max-size 18)
+;; ;;                           (> p (- 1 prob-large-room)) (assoc % :max-size 60)
+;; ;;                           :else %))))))))

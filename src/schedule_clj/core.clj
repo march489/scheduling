@@ -3,7 +3,6 @@
             [clojure.set :as s]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.data.generators :as gen]
             [clojure.stacktrace :as st]
             [clojure.test :as t])
   (:gen-class))
@@ -22,7 +21,7 @@
         (string? id) (-> id
                          (str/replace #"[^a-zA-Z\d\s-]" "")
                          (str/replace #"\s+" "-")
-                         keyword)
+                         keyword )
         :else (throw (IllegalArgumentException. (str (class id) " is invalid format for an id")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -48,26 +47,26 @@
    Throws an exception if the `room-type` is missing or invalid."
   [room-type]
   (condp = room-type
-    :auditorium 20
-    :lab-room 10
-    :sped-room 1
-    :gym-room 20
-    :art-room 5
-    :standard-room 20
-    :cafeteria 1))
+    ::auditorium 20
+    ::lab-room 10
+    ::sped-room 1
+    ::gym-room 20
+    ::art-room 5
+    ::standard-room 20
+    ::cafeteria 1))
 
 (defn default-room-max-capacity
   "Room max capacity for different kinds of rooms in the building.
    Throws an exception if the `room-type` is missing or invalid."
   [room-type]
   (condp = room-type
-    :auditorium 500
-    :lab-room 35
-    :sped-room 15
-    :gym-room 60
-    :art-room 30
-    :standard-room 28
-    :cafeteria 360))
+    ::auditorium 500
+    ::lab-room 35
+    ::sped-room 15
+    ::gym-room 60
+    ::art-room 30
+    ::standard-room 28
+    ::cafeteria 360))
 
 (defn initialize-room
   "Initializes a room in the building. Certain rooms like the `:cafeteria`
@@ -78,11 +77,11 @@
    (initialize-room (name room-type) room-type))
   ([room-number room-type]
    {:pre [(keyword? room-type)]
-    :post [(string? (:room-number %))]}
-   {:room-number  (if (keyword? room-number) (name room-number) (str room-number))
-    :room-type room-type
-    :min-capacity (default-room-min-capacity room-type)
-    :max-capacity (default-room-max-capacity room-type)}))
+    :post [(string? (::room-number %))]}
+   {::room-number  (if (keyword? room-number) (name room-number) (str room-number))
+    ::room-type room-type
+    ::min-capacity (default-room-min-capacity room-type)
+    ::max-capacity (default-room-max-capacity room-type)}))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;
@@ -92,25 +91,25 @@
 (def DEPARTMENTS
   "These are the departments that classroom teachers belong to. Every endorsed teacher
    falls into one of these departments."
-  (list :english-language-arts
-        :math
-        :social-science
-        :world-langauge
-        :science
-        :cte
-        :rotc
-        :art
-        :phys-ed
-        :special-ed))
+  (list ::english-language-arts
+        ::math
+        ::social-science
+        ::world-langauge
+        ::science
+        ::cte
+        ::rotc
+        ::art
+        ::phys-ed
+        ::special-ed))
 
 (def CORE-SUBJECTS
   "These are the core subject areas (departments). importantly, these are the subjects
    in which students with IEPs can have instructional minutes."
-  (list :english-language-arts
-        :math
-        :science
-        :social-science
-        :world-langauge))
+  (list ::english-language-arts
+        ::math
+        ::science
+        ::social-science
+        ::world-langauge))
 
 (def ENDORSEMENTS
   "The specific ISBE endorsements required to teach classes. 
@@ -118,25 +117,25 @@
    but only serves to cover the requisite endorsements in my building.
    The full list of endorsements can be found on the 
    [ILTS page](https://www.il.nesinc.com/PageView.aspx?f=GEN_Tests.html)"
-  (list :english-language-arts
-        :math
-        :social-science-econ
-        :social-science-geography
-        :social-science-poli-sci
-        :social-science-psych
-        :social-science-history
-        :world-langauge-arabic
-        :world-language-mandarin
-        :science-chemistry
-        :science-physics
-        :science-biology
-        :cte
-        :rotc
-        :visual-arts
-        :dance
-        :music
-        :theater-drama
-        :phys-ed))
+  (list ::english-language-arts
+        ::math
+        ::social-science-econ
+        ::social-science-geography
+        ::social-science-poli-sci
+        ::social-science-psych
+        ::social-science-history
+        ::world-langauge-arabic
+        ::world-language-mandarin
+        ::science-chemistry
+        ::science-physics
+        ::science-biology
+        ::cte
+        ::rotc
+        ::visual-arts
+        ::dance
+        ::music
+        ::theater-drama
+        ::phys-ed))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Classifying courses in the same discipline ;;
@@ -173,117 +172,117 @@
        (defn ~class?
          ~(str "Is the class (e.g. `course` or `section`) in the " dept-name " department?")
          [class#]
-         (~cert? (:required-endorsement class#))))))
+         (~cert? (::required-endorsement class#))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Installing department utility functions ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(install-department-utility-functions "english" :english-language-arts)
+(install-department-utility-functions "english" ::english-language-arts)
 
-(install-department-utility-functions "math" :math)
+(install-department-utility-functions "math" ::math)
 
 (install-department-utility-functions "social-science"
-                                      :social-science-econ
-                                      :social-science-geography
-                                      :social-science-poli-sci
-                                      :social-science-psych
-                                      :social-science-history)
+                                      ::social-science-econ
+                                      ::social-science-geography
+                                      ::social-science-poli-sci
+                                      ::social-science-psych
+                                      ::social-science-history)
 
 (install-department-utility-functions "world-language"
-                                      :world-langauge-arabic
-                                      :world-language-mandarin)
+                                      ::world-langauge-arabic
+                                      ::world-language-mandarin)
 
 (install-department-utility-functions "science"
-                                      :science-biology
-                                      :science-chemistry
-                                      :science-physics)
+                                      ::science-biology
+                                      ::science-chemistry
+                                      ::science-physics)
 
-(install-department-utility-functions "cte" :cte)
+(install-department-utility-functions "cte" ::cte)
 
-(install-department-utility-functions "rotc" :rotc)
+(install-department-utility-functions "rotc" ::rotc)
 
 (install-department-utility-functions "art"
-                                      :visual-arts
-                                      :dance
-                                      :music
-                                      :theater-drama)
+                                      ::visual-arts
+                                      ::dance
+                                      ::music
+                                      ::theater-drama)
 
 (install-department-utility-functions "phys-ed"
-                                      :phys-ed)
-
+                                      ::phys-ed)
+ 
 (install-department-utility-functions "special-ed"
-                                      :lbs1)
+                                      ::lbs1)
 
 (defn department
   [endorsement]
   {:pre [endorsement]}
-  (cond (english-cert? endorsement) :english-language-arts
-        (math-cert? endorsement) :math
-        (social-science-cert? endorsement) :social-science
-        (world-language-cert? endorsement) :world-language
-        (science-cert? endorsement) :science
-        (cte-cert? endorsement) :cte
-        (rotc-cert? endorsement) :rotc
-        (art-cert? endorsement) :art
-        (phys-ed-cert? endorsement) :phys-ed
-        (special-ed-cert? endorsement) :special-ed
+  (cond (english-cert? endorsement) ::english-language-arts
+        (math-cert? endorsement) ::math
+        (social-science-cert? endorsement) ::social-science
+        (world-language-cert? endorsement) ::world-language
+        (science-cert? endorsement) ::science
+        (cte-cert? endorsement) ::cte
+        (rotc-cert? endorsement) ::rotc
+        (art-cert? endorsement) ::art
+        (phys-ed-cert? endorsement) ::phys-ed
+        (special-ed-cert? endorsement) ::special-ed
         :else ((println (nil? endorsement))
                (throw (IllegalArgumentException. (str endorsement " is not a valid endorsement."))))))
 
 (defn lunch?
   "Is the section a lunch section?"
   [class]
-  (= :lunch (:course-id class)))
+  (= ::lunch (::course-id class)))
 
 (defn sped-seminar?
   "Is the section a sped-seminar section?"
   [class]
-  (= :sped-seminar (:course-id class)))
+  (= ::sped-seminar (::course-id class)))
 
 
 (defn required-space
   "Returns the required classroom space for a specific course."
   [course]
-  (cond (science-class? course) :lab-room
-        (art-class? course) :art-room
-        (phys-ed-class? course) :gym-room
-        (special-ed-class? course) :sped-room
-        :else :standard-room))
+  (cond (science-class? course) ::lab-room
+        (art-class? course) ::art-room
+        (phys-ed-class? course) ::gym-room
+        (special-ed-class? course) ::sped-room
+        :else ::standard-room))
 
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Defiing periods ;;
 ;;;;;;;;;;;;;;;;;;;;;
 
-(def PERIODS (list :1st-per
-                   :2nd-per
-                   :3rd-per
-                   :4th-per
-                   :5th-per
-                   :6th-per
-                   :7th-per
-                   :8th-per
-                   :A-per
-                   :B-per
-                   :C-per
-                   :D-per))
+(def PERIODS (list ::1st-per
+                   ::2nd-per
+                   ::3rd-per
+                   ::4th-per
+                   ::5th-per
+                   ::6th-per
+                   ::7th-per
+                   ::8th-per
+                   ::A-per
+                   ::B-per
+                   ::C-per
+                   ::D-per))
 
 (defn overlapping-periods?
   [pd-1 pd-2]
   (or (= pd-1 pd-2)
       (let [pds #{pd-1 pd-2}]
-        (or (= pds #{:2nd-per :A-per})
-            (= pds #{:2nd-per :B-per})
-            (= pds #{:6th-per :A-per})
-            (= pds #{:6th-per :B-per})
-            (= pds #{:3rd-per :C-per})
-            (= pds #{:3rd-per :D-per})
-            (= pds #{:7th-per :C-per})
-            (= pds #{:7th-per :D-per})))))
+        (or (= pds #{::2nd-per ::A-per})
+            (= pds #{::2nd-per ::B-per})
+            (= pds #{::6th-per ::A-per})
+            (= pds #{::6th-per ::B-per})
+            (= pds #{::3rd-per ::C-per})
+            (= pds #{::3rd-per ::D-per})
+            (= pds #{::7th-per ::C-per})
+            (= pds #{::7th-per ::D-per})))))
 
 (defn half-block?
   [pd]
-  (some #{pd} '(:A-per :B-per :C-per :D-per)))
+  (#{pd} '(::A-per ::B-per ::C-per ::D-per)))
 
 (defn full-block?
   [pd]
@@ -292,7 +291,7 @@
 
 (defn morning-period?
   [pd]
-  (some #{pd} '(:1st-per :2nd-per :5th-per :6th-per :A-per :B-per)))
+  (some #{pd} '(::1st-per ::2nd-per ::5th-per ::6th-per ::A-per ::B-per)))
 
 (defn afternoon-period?
   [pd]
@@ -321,8 +320,8 @@
   "Initializes a teacher with the minimum amount of data,
    intended to be chained together with functions that add/remove data"
   [id]
-  {:teacher-id (as-keyword-id id)
-   :max-num-classes GENED-MAX-TEACHER-NUM-SECTIONS})
+  {::teacher-id (as-keyword-id id)
+   ::max-num-classes GENED-MAX-TEACHER-NUM-SECTIONS})
 
 ;;;;;;;;;;;;;;
 ;; Students ;;
@@ -333,21 +332,21 @@
    intended to be chained together with functions that modify its fields."
   [id grade & options]
   (let [{:keys [inclusion separate-class]} options]
-    (as-> {:student-id (as-keyword-id id) :grade (str grade)} st
-      (if inclusion (assoc st :inclusion (set inclusion)) st)
-      (if separate-class (assoc st :separate-class (set separate-class)) st))))
+    (as-> {::student-id (as-keyword-id id) ::grade (str grade)} st
+      (if inclusion (assoc st ::inclusion (set inclusion)) st)
+      (if separate-class (assoc st ::separate-class (set separate-class)) st))))
 
 (defn has-iep?
   "Does the student have an IEP?"
   [student]
-  (or (:inclusion student)
-      (:separate-class student)))
+  (or (::inclusion student)
+      (::separate-class student)))
 
 (defn has-seminar?
   "Does the student have seminar minutes? This information is stored 
    in `:separate-class #{:sped-seminar}."
   [student]
-  (contains? (:separate-class student) :sped-seminar))
+  (contains? (::separate-class student) ::sped-seminar))
 
 (defn student-iep-services-for-course
   "Returns the level of IEP student services a `student` has for a particular `course`.
@@ -355,10 +354,10 @@
    services for that course."
   [student course]
   (cond (lunch? course) nil
-        (sped-seminar? course) :separate-class
-        :else (let [department (department (:required-endorsement course))]
-                (cond (contains? (:separate-class student) department) :separate-class
-                      (contains? (:inclusion student) department) :inclusion))))
+        (sped-seminar? course) ::separate-class
+        :else (let [department (department (::required-endorsement course))]
+                (cond (contains? (::separate-class student) department) ::separate-class
+                      (contains? (::inclusion student) department) ::inclusion))))
 
 
 ;; functions for analyzing the student body pointed map
@@ -368,7 +367,7 @@
   [student-body]
   (->> student-body
        vals
-       (mapcat :tickets)))
+       (mapcat ::tickets)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Courses & Sections ;;
@@ -377,15 +376,15 @@
 ;; Initializing courses
 
 
-(def LUNCH-COURSE {:course-id :lunch})
-(def SPED-SEMINAR-COURSE {:course-id :sped-seminar :required-endorsement :lbs1})
+(def LUNCH-COURSE {::course-id ::lunch})
+(def SPED-SEMINAR-COURSE {::course-id ::sped-seminar ::required-endorsement ::lbs1})
 
 (defn initialize-course
   "Initializes a course with its id (a UUID) and the endorsement 
    required to teach it."
   [course-id required-endorsement]
-  {:course-id (as-keyword-id course-id)
-   :required-endorsement required-endorsement})
+  {::course-id (as-keyword-id course-id)
+   ::required-endorsement required-endorsement})
 
 ;; Initializing sections
 (defmulti initialize-section
@@ -394,52 +393,52 @@
    Most classes are handled by the default implementation, but the dispatch handles 
    special cases like `:lunch` or `:sped-seminar`."
   (fn [_section-id course _period _room & _opts]
-    (:course-id course)))
+    (::course-id course)))
 
-(defmethod initialize-section :lunch
+(defmethod initialize-section ::lunch
   initialize-lunch-section
   [section-id course period room & _options]
   ^{:doc "Initializes a lunch section."}
-  {:pre [(nil? (:required-endorsement course))
-         (= :cafeteria (:room-type room)),
-         (= :lunch (:course-id course)),
+  {:pre [(nil? (::required-endorsement course))
+         (= ::cafeteria (::room-type room)),
+         (= ::lunch (::course-id course)),
          (half-block? period)]}
-  {:section-id (as-keyword-id section-id)
-   :course-id :lunch
-   :period period
-   :room :cafeteria
-   :environment :gen-ed
-   :min-size (default-room-min-capacity :cafeteria)
-   :max-size (default-room-max-capacity :cafeteria)})
+  {::section-id (as-keyword-id section-id)
+   ::course-id ::lunch
+   ::period period
+   ::room ::cafeteria
+   ::environment ::gen-ed
+   ::min-size (default-room-min-capacity ::cafeteria)
+   ::max-size (default-room-max-capacity ::cafeteria)})
 
 (defmethod initialize-section :sped-seminar
   initialize-sped-seminar-section
   [section-id course period room & _options]
   ^{:doc "Initializes a special education seminar section"}
-  {:pre [(= :sped-room (:room-type room)),
-         (= :sped-seminar (:course-id course)),
+  {:pre [(= ::sped-room (::room-type room)),
+         (= ::sped-seminar (::course-id course)),
          (half-block? period)]} ; #TODO check if this is a required constraint 
-  {:section-id (as-keyword-id section-id)
-   :course-id :sped-seminar
-   :period period
-   :room (:room-number room)
-   :required-endorsement :lbs1
-   :environment :separate-class
-   :min-size (:min-capacity room)
-   :max-size (:max-capacity room)})
+  {::section-id (as-keyword-id section-id)
+   ::course-id ::sped-seminar
+   ::period period
+   ::room (::room-number room)
+   ::required-endorsement ::lbs1
+   ::environment ::separate-class
+   ::min-size (::min-capacity room)
+   ::max-size (::max-capacity room)})
 
 (defmethod initialize-section :default
   initialize-default-section
   [section-id course period room & options]
-  (let [{:keys [environment] :or {environment :gen-ed}} (apply hash-map options)]
-    {:section-id (as-keyword-id section-id)
-     :course-id (:course-id course)
-     :period period
-     :room (:room-number room)
-     :required-endorsement (:required-endorsement course)
-     :environment environment
-     :min-size (:min-capacity room)
-     :max-size (:max-capacity room)  ;; #TODO update logic with sped requirements
+  (let [{:keys [environment] :or {environment ::gen-ed}} (apply hash-map options)]
+    {::section-id (as-keyword-id section-id)
+     ::course-id (::course-id course)
+     ::period period
+     ::room (::room-number room)
+     ::required-endorsement (::required-endorsement course)
+     ::environment environment
+     ::min-size (::min-capacity room)
+     ::max-size (::max-capacity room)  ;; #TODO update logic with sped requirements
      }))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -453,24 +452,24 @@
    `:honors-level`, `:ap-level`, or `:dual-enrollment`."
   [student course & options]
   (let [services (student-iep-services-for-course student course)
-        {elective :elective} (apply hash-map options)
-        ticket {:course-id (as-keyword-id (:course-id course))
-                :required-endorsement (:required-endorsement course)
-                :student-id (:student-id student)}]
+        {elective ::elective} (apply hash-map options)
+        ticket {::course-id (as-keyword-id (::course-id course))
+                ::required-endorsement (::required-endorsement course)
+                ::student-id (::student-id student)}]
     (cond-> ticket
-      elective (assoc :elective elective)
-      services (assoc services true))))
+      elective (assoc ::elective elective)
+      services (assoc services :true))))
 
 (defn add-single-ticket ;; #TODO determine if its worth keeping this function.
   "Adds `registration-ticket` to student."
   [student registration-ticket]
-  (update student :tickets (fnil conj []) registration-ticket))
+  (update student ::tickets (fnil conj []) registration-ticket))
 
 (defn add-lunch-ticket
   "Add a registration ticket for lunch."
   [student]
   (let [lunch-ticket (initialize-registration-ticket student LUNCH-COURSE)]
-    (update student :tickets (fnil conj []) lunch-ticket)))
+    (update student ::tickets (fnil conj []) lunch-ticket)))
 
 (defn add-seminar-ticket
   "Adds a seminar registration ticket to a student's tickets if the student
@@ -482,10 +481,10 @@
 (defn add-registration-tickets
   "Adds several tickets to a student."
   [student & ticket-options]
-  (let [{required-tickets :required-tickets
-         elective-tickets :elective-tickets} ticket-options]
+  (let [{required-tickets ::required-tickets
+         elective-tickets ::elective-tickets} ticket-options]
     (reduce add-single-ticket student (concat required-tickets
-                                              (map #(assoc % :elective true) elective-tickets))))
+                                              (map #(assoc % ::elective true) elective-tickets))))
   ;; (reduce add-single-ticket student tickets)
   )
 
