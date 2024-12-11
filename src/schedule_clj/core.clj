@@ -306,24 +306,35 @@
 
 ;; legal/constract constraints
 
-;; #TODO determine if this is better as a function cond on course-id 
-;; or something similar
-(def GENED-MAX-TEACHER-PREPS
-  "The contract number of distinct courses a general education teacher
-   can be assigned to teach."
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; Teachers & faculty ;;
+;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def DEFAULT-MAX-PREPS
+  "The default maximum number of distinct courses a teacher can be assigned to."
   2)
 
-(def GENED-MAX-TEACHER-NUM-SECTIONS
-  "The contract number of maximum sections that a general education teacher
-   can be assigned to teach."
+(def DEFAULT-MAX-SECTIONS
+  "The default maximum number of sections a teacher can be assigned to."
   5)
 
+(defn teacher-add-endorsement
+  "Adds an endorsement to a teacher."
+  [teacher endorsement]
+  (update teacher ::endorsements (fnil conj #{}) endorsement))
+
 (defn initialize-teacher
-  "Initializes a teacher with the minimum amount of data,
-   intended to be chained together with functions that add/remove data"
-  [id]
-  {::teacher-id (as-keyword-id id)
-   ::max-num-classes GENED-MAX-TEACHER-NUM-SECTIONS})
+  "Initializes a teacher with a `primary-endorsement`"
+  [teacher-id primary-endorsement & options]
+  (let [opts (apply hash-map options)]
+    (cond-> {::teacher-id (as-keyword-id teacher-id)
+             ::primary-endorsement primary-endorsement
+             ::department (department primary-endorsement)
+             ::max-preps DEFAULT-MAX-PREPS
+             ::max-sections DEFAULT-MAX-SECTIONS}
+      (::secondary-endorsement opts) (teacher-add-endorsement (::secondary-endorsement opts))
+      (::max-preps opts) (assoc ::max-preps (::max-preps opts))
+      (::max-sections opts) (assoc ::max-sections (::max-sections opts)))))
 
 ;;;;;;;;;;;;;;
 ;; Students ;;
@@ -443,6 +454,7 @@
      ::max-size (::max-capacity room)  ;; #TODO update logic with sped requirements
      }))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Registration ticket ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -475,7 +487,7 @@
 
 (defn add-seminar-ticket
   "Adds a seminar registration ticket to a student's tickets if the student
-   has `:sped-seminar` separate class minutes."
+   has `::sped-seminar` separate class minutes."
   [student]
   (let [seminar-ticket (initialize-registration-ticket student SPED-SEMINAR-COURSE)]
     (add-single-ticket student seminar-ticket)))
@@ -487,6 +499,9 @@
          elective-tickets ::elective-tickets} ticket-options]
     (reduce add-single-ticket student (concat required-tickets
                                               (map #(assoc % ::elective true) elective-tickets)))))
+
+
+
 
 
 

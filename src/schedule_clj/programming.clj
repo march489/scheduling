@@ -31,11 +31,17 @@
   {:post [(<= (count %) 4)]} ;; asserts at there are at most 4 lunch sections
   (course-sections schedule ::c/lunch))
 
-(defn section-roster
+(defn section-student-roster
   "Returns the roster of student-ids for students registerd to a particular `section-id`,
    which consists of a pointed map of registration tickets."
   [schedule section-id]
   (get-in schedule [::sections section-id ::c/roster]))
+
+(defn section-registered-teachers
+  "Returns the pointed map of teacher(s) assigned to teach this section."
+  [schedule section-id]
+  (merge (get-in schedule [::sections section-id ::c/teacher])
+         (get-in schedule [::sections section-id ::c/co-teacher])))
 
 (defn section-register-student
   "Updates the schedule to add the registration ticket to the roster, 
@@ -54,11 +60,27 @@
    If the section doesn't exist or the student is not in that section, 
    the original schedule is returned."
   [schedule section-id student-id]
-  (if-let [found-student-ticket (student-id (section-roster schedule section-id))]
+  (if-let [found-student-ticket (student-id (section-student-roster schedule section-id))]
     (-> schedule
         (update-in [::sections section-id ::c/roster] dissoc student-id)
         (update ::unresolved-tickets conj found-student-ticket))
     schedule))
+
+(defn section-assign-teacher
+  "Updates the schedule to assign the `teacher` to the section.
+   Assumes the teacher being passed is a valid choice.
+   Throws an assertion error if the passed `section-id` doesn't exist."
+  [schedule section-id teacher-id]
+  {:pre [(get-in schedule [::sections section-id])]}
+  (assoc-in schedule [::sections section-id ::c/teacher] teacher-id))
+
+(defn section-assign-coteacher
+  "Updates the schedule to assign the `co-teacher` to the section.
+   Assumes the teacher being passed is a valid choice.
+   Throws an assertion error if the passed `section-id` doesn't exist."
+  [schedule section-id co-teacher-id]
+  {:pre [(get-in schedule [::sections section-id])]}
+  (assoc-in schedule [::sections section-id ::c/co-teacher] co-teacher-id))
 
 (defn destroy-section
   "Updates the schedule to destroy the associated section and remove it entirely.
@@ -120,15 +142,17 @@
               (quot number-of-tickets
                     (c/default-room-max-capacity (c/required-space {::c/course-id course-id}))))])
 
-(estimate-number-of-sections [::c/lunch 500])
+(defn course-section-estimates
+  [registration-tickets]
+  (let [freqs (->> registration-tickets
+                   (map ::c/course-id)
+                   frequencies)]
+    (into {} (map estimate-number-of-sections freqs))))
 
 (defn course-base-priorities
   "Calculates the frequencies of each `course-id` among the tickets."
   [registration-tickets]
-  (let [freqs (->> registration-tickets
-                   (map ::c/course-id)
-                   frequencies)
-        section-count-estimates (into {} (map estimate-number-of-sections freqs))
+  (let [section-count-estimates (course-section-estimates registration-tickets)
         max-sections (apply max (vals section-count-estimates))]
     (update-vals section-count-estimates #(- max-sections %))))
 
@@ -144,12 +168,50 @@
     ;;   (c/lunch? registration-ticket)  ;; #TODO Find the right setting for lunch
       )))
 
-#_(time (sort (update-vals (let [tickets (get-tickets (gen/random-student-body 1200 (gen/random-course-catalog 50)))
-                                 base-priorities (course-base-priorities tickets)]
-                             (reduce #(update %1 (ticket-priority base-priorities %2) (fnil conj []) %2)
-                                     (sorted-map-by >)
-                                     tickets))
-                           count)))
+(defn radix-sorted-registration-tickets
+  [student-body]
+  (let [registration-tickets (get-tickets student-body)
+        base-priorities (course-base-priorities registration-tickets)]
+    (->> (reduce #(update %1 (ticket-priority base-priorities %2) (fnil conj []) %2)
+                 {}
+                 registration-tickets)
+         (sort #(> (first %1) (first %2)))
+         (map second)
+         flatten)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Questions about teachers ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn section-teacher-registered?
+  "Is the teacher indicated by the `teacher-id` registered as the teacher or co-teacher
+   for the passed `section-id` in the `schedule`?"
+  [schedule section-id teacher-id]
+  (when-let [section (get-in schedule [::sections section-id])]
+    (or (= teacher-id (::c/teacher section))
+        (= teacher-id (::c/co-teacher section)))))
+
+(defn teacher-sections
+  "Returns a pointed map of sections in `(::sections schedule)` for which the teacher 
+   indicated by the `teacher-id` is listed as a teacher or co-teacher."
+  [schedule teacher-id]
+  (c/as-pointed-map (into {}
+                          (for [[section-id section] (::sections schedule)
+                                :when (section-teacher-registered? schedule section-id teacher-id)]
+                            [section-id section]))
+                    ::c/section-id))
+
+(defn teacher-preps
+  "Returns a set of the `course-id`s of the distinct courses that the teacher is
+   currently registered to teach at least one section of."
+  [schedule teacher-id]
+  (->> teacher-id
+       (teacher-sections schedule)
+       vals
+       (map ::c/course-id)
+       distinct
+       set))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Questions about students ;;
@@ -158,7 +220,7 @@
 (defn section-student-registered?
   "Is the student registered to this section?"
   [schedule section-id student-id]
-  (contains? (section-roster schedule section-id) student-id))
+  (contains? (section-student-roster schedule section-id) student-id))
 
 (defn student-has-lunch?
   "Is the student indicated by the `student-id` registered to a lunch section?"
